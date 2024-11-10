@@ -38,7 +38,7 @@ def showPointCloud(verts):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    lim = 1
+    lim = 0.5
     ax.set_xlim(-lim,lim)
     ax.set_ylim(-lim,lim)
     ax.set_zlim(-lim,lim)
@@ -150,7 +150,10 @@ def findDepth(faceTemplateFileName, coordsFromImageRaw,
     camDist = 3
     stepSize = 0.01
     if debug:
-        showPointCloud(verts)
+        pcloud = []
+        for key in idMapping.keys():
+            pcloud.append(verts[idMapping[key]])
+        showPointCloud(pcloud)
 
     vects = []
     for vert in verts:
@@ -160,11 +163,11 @@ def findDepth(faceTemplateFileName, coordsFromImageRaw,
         # calculate the gradient. 
         # Get loss, then add 0.0001 to angleHot, and get loss again 
         delta = 0.0001
-        relCurrent = getRelation3d(lEyeCornerIdObj, upNoseIdImg, rEyeCornerIdObj, upNoseIdObj, vects,
+        relCurrent = getRelation3d(lEyeCornerIdObj, upNoseIdObj, rEyeCornerIdObj, upNoseIdObj, vects,
                             angleHor + delta, angleVer, camDist)
         relTarget = getRelation2d(lEyeCornerIdImg, upNoseIdImg, rEyeCornerIdImg, upNoseIdImg, coordsFromImg)
         loss1 = loss([relCurrent], [relTarget])
-        relCurrent = getRelation3d(lEyeCornerIdObj, upNoseIdImg, rEyeCornerIdObj, upNoseIdObj, vects,
+        relCurrent = getRelation3d(lEyeCornerIdObj, upNoseIdObj, rEyeCornerIdObj, upNoseIdObj, vects,
                             angleHor - delta, angleVer, camDist)
         loss2 = loss([relCurrent], [relTarget])
         horizPartDeriv = (loss1 - loss2) / delta # partial derivative of loss on horizontal angle
