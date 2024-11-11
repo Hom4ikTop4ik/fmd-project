@@ -25,7 +25,8 @@ for imgfile, coordsfile in zip(os.listdir(imageDir), os.listdir(coordsDir)):
                             mappings.upNoseIdImgDlib,
                             idmap, 
                             accuracy=100,debug=False)
-    
+    depthlist = imgutils.noiseAdding(depthlist, 0.02)
+
     # uncomment next line to show depth on image
     # imgutils.showPointsWithDepth(imageDir + imgfile, coordsDir + coordsfile, depthlist)
     

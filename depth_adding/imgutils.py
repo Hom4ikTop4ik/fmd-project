@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw
 import cv2
 import coordsParser
+import numpy as np
 
 def showPointsWithDepth(imgfile:str, coordsfile:str, depthList):
     img = cv2.imread(imgfile)
@@ -26,3 +27,14 @@ def normalizeCoords(imageSize, coordPair):
         coordPair[i] /= imageSize[i]
     print(coordPair)
     return coordPair
+
+
+def noiseAdding(depthlist, sigma):
+    ans = []
+    for depth in depthlist:
+        ans.append(depth + np.random.normal(0, sigma))
+    return ans
+        
+ls = [1.0, 2.0]
+ls = noiseAdding(ls, 0.2)
+print(ls)
