@@ -28,13 +28,13 @@ for imgfile, coordsfile in zip(os.listdir(imageDir), os.listdir(coordsDir)):
     depthlist = imgutils.noiseAdding(depthlist, 0.02)
 
     # uncomment next line to show depth on image
-    # imgutils.showPointsWithDepth(imageDir + imgfile, coordsDir + coordsfile, depthlist)
+    imgutils.showPointsWithDepth(imageDir + imgfile, coordsDir + coordsfile, depthlist)
     
     # writing 3d coordinates to the output file
     for cords, depth in zip(rawCoords, depthlist):
         cords = imgutils.normalizeCoords(imageSize, cords)
         cords.append(depth)    
-    outFilePath = outputDir + imgfile[:-4] + "txt"
+    outFilePath = outputDir + imgfile[:-5] + "txt"
     outFile = open(outFilePath, "w")
 
     for el in rawCoords:

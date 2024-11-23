@@ -35,6 +35,3 @@ def noiseAdding(depthlist, sigma):
         ans.append(depth + np.random.normal(0, sigma))
     return ans
         
-ls = [1.0, 2.0]
-ls = noiseAdding(ls, 0.2)
-print(ls)
