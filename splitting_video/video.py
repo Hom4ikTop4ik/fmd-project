@@ -12,7 +12,7 @@ def extract_frames(video_path, output_folder):
     
     # проверка успешности открытия
     if not cap.isOpened():
-        print("Ошибка: не удалось открыть видео.")
+        print("Error: can not open the video")
         return
     
     # чтение кадров
@@ -27,7 +27,7 @@ def extract_frames(video_path, output_folder):
         frame_count += 1
     
     cap.release()
-    print(f"Извлечено {frame_count} кадров в папку {output_folder}")
+    print(f"Extracted {frame_count} frames to folder {output_folder}")
 
 # пример использования
 video_path = "video.mp4"  # путь к видео либо имя видео, если оно в текущей директории
