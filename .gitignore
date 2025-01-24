@@ -1,1 +1,2 @@
 model/registry/*
+**/__pycache__

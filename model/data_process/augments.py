@@ -109,4 +109,5 @@ def augment_gen(dataset: list, epochs: int = 1, displace: int = 50,
         bt_images, bt_coords = random.choice(dataset)
         bt_images = bt_images.to(torch.float32) / 255
         print(f'batch {i} augmented')
+        print(f'devices {bt_coords.device}, {bt_images.device}')
         yield augment_batch(bt_images, bt_coords, displace, rotate, noise)

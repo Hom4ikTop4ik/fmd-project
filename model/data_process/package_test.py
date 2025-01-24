@@ -1,4 +1,4 @@
-from augments import augmented_gen
+from augments import augment_gen
 from data_loader import load
 import os
 import datetime
@@ -10,7 +10,7 @@ def test():
     print('load started', datetime.datetime.now().time())
     train = load(1000, 20, os.path.join(current_dir, '../registry/dataset'))
     print('load ended', datetime.datetime.now().time())
-    gen = augmented_gen(1, train)
+    gen = augment_gen(1, train)
     for imgtens, coordtens in gen:
         
         coords = coordtens[0]

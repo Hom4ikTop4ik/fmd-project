@@ -1,18 +1,18 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import torch
 
-def get_mean_coords(landmarks_list, tensor):
-    x = torch.zeros(1, dtype=torch.float32)
-    y = torch.zeros(1, dtype=torch.float32)
+def get_mean_coords(landmarks_list: list, tensor: torch.Tensor):
+    x = torch.zeros(tensor.shape[0], dtype=torch.float32)
+    y = torch.zeros(tensor.shape[0], dtype=torch.float32)
     for id in landmarks_list:
-        x += tensor[id, 0]
-        y += tensor[id, 1]
+        x += tensor[:, id, 1]
+        y += tensor[:, id, 2]
     x /= len(landmarks_list)
     y /= len(landmarks_list)
-    return x, y
+    return torch.stack([x, y])
 
 
-def show_tensor(tensor, landmarks = None, nolandmarks=False, no_z = False):
+def show_tensor(tensor: torch.Tensor, landmarks = None, nolandmarks=False, no_z = False):
     # Make sure tensors are on CPU and detached from grad
     image = tensor.cpu().detach()
     
