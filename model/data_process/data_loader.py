@@ -8,6 +8,9 @@ def load(size: int, bsize: int,
     '''
     size - count of batches. 
     bsize - size of the batch.
+    dataset_path - path to the folder with two tensors, images and coords.
+    coordsfile - name of the file of coords tensor.
+    imagssfile - name of the file of images tensor.
     '''
     images = torch.load(os.path.join(dataset_path, coordsfile))
     coords = torch.load(os.path.join(dataset_path, imagesfile))

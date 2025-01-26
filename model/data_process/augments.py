@@ -4,7 +4,7 @@ import torch
 import torchvision.transforms.functional as F
 import random
 
-__all__ = ['augment_batch', 'augment_gen']
+__all__ = ['augment_batch', 'augment_gen', 'make_filter']
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -52,7 +52,8 @@ def noise_tensor(img_tensor, noise_factor):
     
     return torch.from_numpy(img.transpose(2, 0, 1))
 
-def augment_batch(img_tensor_batch, coords_tensor_batch, displace: int, rotate=0, noise=0.0):
+def augment_batch(img_tensor_batch, coords_tensor_batch, device,
+                   displace: int, rotate=0, noise=0.0):
     imglist, coordlist = [], []
     for img, coords in zip(img_tensor_batch, coords_tensor_batch):
         if(img.shape[1] != img.shape[2]):
@@ -90,24 +91,42 @@ def augment_batch(img_tensor_batch, coords_tensor_batch, displace: int, rotate=0
                                 cornery, cornery + newsize, prevsize)
         
         if(noise > 0):
-            img = noise_tensor(img, noise)
+            img = noise_tensor(img.to('cpu'), noise).to(device)
         
         imglist.append(img)
         coordlist.append(coords)
     return torch.stack(imglist), torch.stack(coordlist)
 
-def augment_gen(dataset: list, epochs: int = 1, displace: int = 50, 
-                  rotate: int = 30, noise: float = 0.1):
+def make_filter(*keypoints: list):
+    def kpfilter(coordbatch: torch.Tensor):
+        return torch.stack([coordbatch[:, k] for k in keypoints]).permute(1, 0, 2)
+    return kpfilter
+
+def augment_gen(dataset: list, epochs: int = 1, device = 'cpu', part = 0.8, 
+                displace: int = 50, rotate: int = 30, noise: float = 0.1, verbose = False):
     '''
-    returns generator of augmented images.
-    dataset - list of pairs of batches (imagebatch, coordsbatch).
+    returns generator of augmented images. 
+    dataset - list of pairs of batches (imagebatch, coordsbatch). 
+    epochs - number of epochs until end of generation. 
+    part - part of the dataset, signed. Example: 0.7 means first 70%, -0.3 means last 30%.  
     displace - how many pixels from side of image we crop randomly.
     rotate - range of random rotations in degrees.
-    noise - level of noise, from 0 to 1.
+    noise - level of noise, from 0 to 1. Now noise > 0 is slowing generation by 2x 
+    because it is estimating on cpu
     '''
-    for i in range(epochs * len(dataset)):
-        bt_images, bt_coords = random.choice(dataset)
+    random.shuffle(dataset)
+    slicepart = int(len(dataset) * part)
+    if verbose:
+        print(f'slice of dataset is {slicepart}')
+    for i in range(epochs * abs(slicepart)):
+        if slicepart > 0:
+            bt_images, bt_coords = random.choice(dataset[:slicepart])
+        else:
+            bt_images, bt_coords = random.choice(dataset[slicepart:])
         bt_images = bt_images.to(torch.float32) / 255
-        print(f'batch {i} augmented')
-        print(f'devices {bt_coords.device}, {bt_images.device}')
-        yield augment_batch(bt_images, bt_coords, displace, rotate, noise)
+        bt_coords = bt_coords.to(device)
+        bt_images = bt_images.to(device)
+        if verbose:
+            print(f'batch {i} augmented')
+            print(f'devices {bt_coords.device}, {bt_images.device}')
+        yield augment_batch(bt_images, bt_coords, device, displace, rotate, noise)
