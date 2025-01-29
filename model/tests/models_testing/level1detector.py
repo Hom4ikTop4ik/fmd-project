@@ -1,4 +1,7 @@
-import torch.nn as nn
+import cv2
+import torch
+from torch import nn
+import numpy as np
 
 class Level1Detector(nn.Module):
     def __init__(self, device):
@@ -42,3 +45,40 @@ class Level1Detector(nn.Module):
         x = self.fc2(x)
         x = x.view(-1, 7, 2)
         return x
+
+
+    
+        
+def test():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    det1 = Level1Detector(device).to(device)
+    det1.load_state_dict(torch.load("registry/weights/lvl1det_bns.pth"))
+    det1.eval()
+    
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        frame = torch.from_numpy(frame.astype(np.float32)).to(device) / 255
+        imgtens = frame.permute(2, 0, 1)[:, 100:356, 100:356].unsqueeze(0)
+        print(imgtens.shape)
+        predict = det1(imgtens)
+        newimg = (imgtens[0, :, :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
+
+        newimg = np.ascontiguousarray(newimg)
+        for coord in predict[0]:
+            x, y = coord[0], coord[1]
+            # print(coord.shape, newimg.shape, predict.shape)
+            newimg = cv2.circle(newimg, (int(x * newimg.shape[1]), int(y * newimg.shape[0])), 2, (255, 255, 255), 2)
+        
+        cv2.imshow("img", newimg)
+            
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release resources
+    cap.release()
+    cv2.destroyAllWindows()
+
+test()

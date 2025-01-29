@@ -71,24 +71,24 @@ def augment_batch(img_tensor_batch, coords_tensor_batch, device,
         newsize = prevsize - displace
         cornerx = random.randint(0, prevsize - newsize)
         cornery = random.randint(50, (prevsize - newsize))
-        prevcoords = coords.clone()
-        previmg = img.clone()
+        # prevcoords = coords.clone()
+        # previmg = img.clone()
         img = img[:, cornery : cornery + newsize, cornerx : cornerx + newsize]
         coords = crop_coords(coords, cornerx, cornerx + newsize, cornery,
                             cornery + newsize, prevsize)
-        
-        if(torch.max(coords[:, 0]) > 1 or torch.max(coords[:, 1]) > 1 
-           or torch.min(coords[:, 0]) < 0 or torch.min(coords[:, 1]) < 0):
-            img = previmg
-            coords = prevcoords
-            corrective = int((prevsize - newsize) / 3)
-            cornerx = random.randint(corrective, prevsize - newsize - corrective)
-            cornery = random.randint(corrective, prevsize - newsize - corrective)
-            prevcoords = coords.clone()
-            previmg = img.clone()
-            img = img[:, cornery : cornery + newsize, cornerx : cornerx + newsize]
-            coords = crop_coords(coords, cornerx, cornerx + newsize,
-                                cornery, cornery + newsize, prevsize)
+
+        # if(torch.max(coords[:, 0]) > 1 or torch.max(coords[:, 1]) > 1 
+        #    or torch.min(coords[:, 0]) < 0 or torch.min(coords[:, 1]) < 0):
+        #     img = previmg
+        #     coords = prevcoords
+        #     corrective = int((prevsize - newsize) / 3)
+        #     cornerx = random.randint(corrective, prevsize - newsize - corrective)
+        #     cornery = random.randint(corrective, prevsize - newsize - corrective)
+        #     prevcoords = coords.clone()
+        #     previmg = img.clone()
+        #     img = img[:, cornery : cornery + newsize, cornerx : cornerx + newsize]
+        #     coords = crop_coords(coords, cornerx, cornerx + newsize,
+        #                         cornery, cornery + newsize, prevsize)
         
         if(noise > 0):
             img = noise_tensor(img.to('cpu'), noise).to(device)
