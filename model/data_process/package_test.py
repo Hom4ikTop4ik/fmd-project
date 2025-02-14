@@ -1,12 +1,13 @@
 from augments import augment_gen, make_filter
 from data_loader import load
+from utils import center_of_masses
 import os
 import torch
 import datetime
 import numpy as np
 import cv2
 
-def test():   
+def test_augment():   
     current_dir = os.path.dirname(os.path.abspath(__file__))
     print('load started', datetime.datetime.now().time())
     train = load(1000, 20, os.path.join(current_dir, '../registry/dataset'))
@@ -32,4 +33,21 @@ def test():
         print('augmented', datetime.datetime.now() - time)
         time = datetime.datetime.now()
 
-test()
+def test_centermass():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print('device: ', device)
+    imgbatch = torch.Tensor([[
+        [0, 2, 1],
+        [0, 1, 2],
+        [0, 0, 0]
+    ],[
+        [1, 0, 1],
+        [0, 1, 0],
+        [0, 8, 0]
+    ]]).to(device).unsqueeze(1)
+    
+    print(imgbatch.shape)
+
+    print(center_of_masses(imgbatch))
+
+test_centermass()
