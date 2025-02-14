@@ -41,7 +41,7 @@ def noise_tensor(img_tensor, noise_factor):
     img += noiseframe
     img = np.clip(img, 0, 1)
 
-    noisesize = 3
+    noisesize = 2
 
     downscale = img.copy()
     downscale = cv2.resize(downscale, (0, 0), fx= 1.0 / noisesize, fy= 1.0 / noisesize)
