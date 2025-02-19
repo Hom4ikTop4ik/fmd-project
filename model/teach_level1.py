@@ -25,6 +25,9 @@ total_iterations = 500
 iter_k = 20
 iter_l = 20 # similar with iter_k, why not
 
+coordsPtFile = "dataset_coords.pt"
+imagesPtFile = "dataset_images.pt"
+
 print(time.time())
 
 def interactor(signal, frame):
@@ -80,7 +83,7 @@ weight_save_path = os.path.join(registry_path, 'weights', 'lvl1det_bns.pth')
 dataset = load(
     total_iterations, batch_size, 
     os.path.join(current_path, registry_path, 'dataset'), 
-    coordsfile="microset_coords.pt", imagesfile="microset_images.pt"
+    coordsfile=coordsPtFile, imagesfile=imagesPtFile
 )
 
 # establishing devices and signal handler
