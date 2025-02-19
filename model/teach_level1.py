@@ -5,11 +5,14 @@ import signal
 import torch
 import torch.nn as nn
 import numpy as np
+import threading
 import time
 
 from data_process import augment_gen, make_filter
 from data_process import load
 from cascade_detector import Level1Detector
+
+USE_CPU_WHATEVER = False
 
 noise = 0.05
 part = 0.9
@@ -25,8 +28,8 @@ total_iterations = 500
 iter_k = 20
 iter_l = 20 # similar with iter_k, why not
 
-coordsPtFile = "dataset_coords.pt"
-imagesPtFile = "dataset_images.pt"
+coords_pt_file = "dataset_coords.pt"
+images_pt_file = "dataset_images.pt"
 
 print(time.time())
 
@@ -83,41 +86,25 @@ weight_save_path = os.path.join(registry_path, 'weights', 'lvl1det_bns.pth')
 dataset = load(
     total_iterations, batch_size, 
     os.path.join(current_path, registry_path, 'dataset'), 
-    coordsfile=coordsPtFile, imagesfile=imagesPtFile
+    coordsfile=coords_pt_file, imagesfile=images_pt_file
 )
 
 # establishing devices and signal handler
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if (USE_CPU_WHATEVER):
+    device = 'cpu'
 print("devise is: ", device)
-signal.signal(signal.SIGINT, interactor)
 
+signal.signal(signal.SIGINT, interactor)
 
 lvl1det = Level1Detector(device).to(device)
 if input('load weigths from selected weight save path? (y/n) ') == 'y':
-    lvl1det.load_state_dict(torch.load(weight_save_path))
+    lvl1det.load_state_dict(torch.load(weight_save_path, map_location = device))
 
 optimizer = torch.optim.Adam(lvl1det.parameters(), 0.001, betas=(0.9, 0.95))
 criterion = nn.MSELoss().to(device)
 coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
 
-"""
-# learning cycle
-iteration = 0
-for bt_images, bt_coords in augment_gen(dataset, epochs=10, device=device,
-                                        noise=0, part=0.9, displace=80, rotate=20):
-    
-    truth = coordfilter(bt_coords)[:, :, 0:2]
-    ans = lvl1det(bt_images)
-    loss = criterion(ans, truth)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    
-    iteration += 1
-    print(f'loss {loss:.5f}, iteration: {iteration}')
-"""
-
-# new learning cycle
 def print_progress_bar(iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
     percent = (iteration / total) * 100
     bar_length = 10  # Length of the progress bar
@@ -125,7 +112,6 @@ def print_progress_bar(iteration, total, epoch, epochs, iter_per_second, loss, a
     progress = '▓' * (block//2) + '▒' * (block%2) + '░' * (bar_length - block // 2 - block % 2)
     sys.stdout.write(f'\r[{progress}] {percent:.0f}% (Epoch: {epoch}/{epochs}, Iteration: {iteration}/{total}, Iter/s: {iter_per_second:4.2f}, Loss: {loss:.5f}, Average Loss: {average_loss:.5f}, Median Loss: {median_loss:.5f})')
     sys.stdout.flush()
-
 
 # Learning cycle
 for epoch in range(epochs):
@@ -140,7 +126,6 @@ for epoch in range(epochs):
     for iteration in range(1, total_iterations + 1):
         # Get the batch of images and coordinates
         bt_images, bt_coords = next(augment_gen(dataset, epochs=1, device=device, noise=noise, part=part, displace=displace, rotate=rotate))
-        
         # Move tensors to the device
         bt_images = bt_images.to(device)
         bt_coords = bt_coords.to(device)
@@ -180,9 +165,6 @@ for epoch in range(epochs):
         # Update the progress bar
         print_progress_bar(iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
     print("\n")
-
-
-
 
 # Save after every iterations
 if (input("Do you wanna save weigths? (y/n) ")[0] == 'y'):

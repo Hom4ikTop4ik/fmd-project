@@ -3,10 +3,11 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as F
 import random
-import threading
-import time
 
 __all__ = ['augment_batch', 'augment_gen', 'make_filter']
+
+frequency = 0.05
+show = False
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -37,11 +38,17 @@ def crop_coords(coords, left, right, top, bottom, prevsize):
         coords[i][1] = y / float(bottom - top)
     return coords
 
-def show_image(img_to_print, test = 0):
+def show_image(img_to_print, show = False):
+    if (not show):
+        return
+
     name = "img" + str(random.randint(0, 1000))
     cv2.imshow(name, img_to_print)
-    cv2.waitKey(test)
-    # cv2.destroyWindow(name) # Закрываем окно после отображения
+    cv2.waitKey(0)
+    # Для продолжения жмякнуть клавишу в любом активном окне с фото, 
+    #   чтобы продолжить работу НЕ закрывая окно 
+    # (возможны временные зависания)
+    return name
 
 def noise_tensor(img_tensor, noise_factor, verbose = False):
     device = img_tensor.device # Сохраняем текущее устройство
@@ -58,32 +65,75 @@ def noise_tensor(img_tensor, noise_factor, verbose = False):
 
     for noise_size in noise_sizes:
         # Уменьшаем изображение
-        downscale = torch.nn.functional.interpolate(
-            img_tensor.unsqueeze(0), # создать псевдо ОСь с размером батча 
-            scale_factor=1.0 / noise_size, mode='bilinear', align_corners=False
-        ).squeeze(0) # отбросить псевдо ось
+        mode = 'bicubic' # or 'linear', 'bilinear', 'nearest'
+
+        if mode == 'linear':
+            downscale = torch.nn.functional.interpolate(
+                img_tensor,
+                scale_factor = 1.0 / noise_size, 
+                mode = mode, 
+                align_corners = False
+            )
+        elif mode == 'bilinear':
+            downscale = torch.nn.functional.interpolate(
+                img_tensor.unsqueeze(0), # создать псевдо ОСь с размером батча 
+                scale_factor = 1.0 / noise_size, 
+                mode = mode, 
+                align_corners = False
+            ).squeeze(0) # отбросить псевдо ось
+        elif mode == 'nearest':
+            downscale = torch.nn.functional.interpolate(
+                img_tensor,
+                scale_factor = 1.0 / noise_size, 
+                mode = mode
+            )
+        elif mode == 'bicubic':
+            downscale = torch.nn.functional.interpolate(
+                img_tensor.unsqueeze(0),
+                scale_factor = 1.0 / noise_size, 
+                mode = mode, 
+                align_corners = False
+            ).squeeze(0)
 
         # Добавляем шум в уменьшенное изображение
         noise_small = torch.randn_like(downscale, device=device) * noise_factor
         downscale = torch.clamp(downscale + noise_small, 0, 1)
     
         # Увеличиваем обратно
-        upscaled = torch.nn.functional.interpolate(
-            downscale.unsqueeze(0), scale_factor=noise_size, mode='bilinear', align_corners=False
-        ).squeeze(0)
+        if mode == 'linear':
+            upscaled = torch.nn.functional.interpolate(
+                downscale,
+                scale_factor = noise_size, 
+                mode = mode, 
+                align_corners = False
+            )
+        elif mode == 'bilinear':
+            upscaled = torch.nn.functional.interpolate(
+                downscale.unsqueeze(0),
+                scale_factor = noise_size, 
+                mode = mode, 
+                align_corners = False
+            ).squeeze(0)
+        elif mode == 'nearest':
+            upscaled = torch.nn.functional.interpolate(
+                downscale,
+                scale_factor = noise_size, 
+                mode = mode
+            )
+        elif mode == 'bicubic':
+            upscaled = torch.nn.functional.interpolate(
+                downscale.unsqueeze(0),
+                scale_factor = noise_size, 
+                mode = mode, 
+                align_corners = False
+            ).squeeze(0)
 
         img_tensor = img_tensor + upscaled
 
     img_tensor = torch.clamp(img_tensor / (len(noise_sizes) + 1), 0, 1)
-    
-
-    if (random.random() < 0.005):
-        test = 1
-        show_image(img_tensor.cpu().numpy().transpose(1, 2, 0), test)
-    #     thread = threading.Thread(target=show_image, args=(img_tensor.cpu().numpy().transpose(1, 2, 0),))
-    #     # print(thread, end="")
-    #     thread.start()
-
+    if (random.random() < frequency):
+        show_image(img_tensor.cpu().numpy().transpose(1, 2, 0), show)
+       
     return img_tensor
 
 def augment_batch(img_tensor_batch, coords_tensor_batch, device,
@@ -91,7 +141,7 @@ def augment_batch(img_tensor_batch, coords_tensor_batch, device,
     imglist, coordlist = [], []
     for img, coords in zip(img_tensor_batch, coords_tensor_batch):
         if(img.shape[1] != img.shape[2]):
-            print("image is not square!")
+            print("Image is not square!")
             return None
         
         img = img[[2,1,0],:,:] # Каналы обратно вернуть
@@ -165,4 +215,5 @@ def augment_gen(dataset: list, epochs: int = 1, device = 'cuda:0' if torch.cuda.
         if verbose:
             print(f'batch {i} augmented')
             print(f'devices {bt_coords.device}, {bt_images.device}')
+
         yield augment_batch(bt_images, bt_coords, device, displace, rotate, noise)
