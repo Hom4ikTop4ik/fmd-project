@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as F
 import random
+import threading
+import time
 
 __all__ = ['augment_batch', 'augment_gen', 'make_filter']
 
@@ -35,22 +37,54 @@ def crop_coords(coords, left, right, top, bottom, prevsize):
         coords[i][1] = y / float(bottom - top)
     return coords
 
-def noise_tensor(img_tensor, noise_factor):
-    img = img_tensor.numpy().transpose(1, 2, 0)
-    noiseframe = np.random.normal(0, noise_factor, img.shape)
-    img += noiseframe
-    img = np.clip(img, 0, 1)
+def show_image(img_to_print, test = 0):
+    name = "img" + str(random.randint(0, 1000))
+    cv2.imshow(name, img_to_print)
+    cv2.waitKey(test)
+    # cv2.destroyWindow(name) # Закрываем окно после отображения
 
-    noisesize = 2
+def noise_tensor(img_tensor, noise_factor, verbose = False):
+    device = img_tensor.device # Сохраняем текущее устройство
+    if verbose:
+        print("augments.py/noise_tensor/device:" + str(device))
 
-    downscale = img.copy()
-    downscale = cv2.resize(downscale, (0, 0), fx= 1.0 / noisesize, fy= 1.0 / noisesize)
-    noiseframe = np.random.normal(0, noise_factor, downscale.shape)
-    img += cv2.resize(downscale + noiseframe, (0, 0), fx=noisesize, fy=noisesize)
-    img /= 2
-    img = np.clip(img, 0, 1)
+    # Добавляем гауссовский шум
+    noise = torch.randn_like(img_tensor, device=device) * noise_factor
+    img_tensor = torch.clamp(img_tensor + noise, 0, 1)
     
-    return torch.from_numpy(img.transpose(2, 0, 1))
+    # Во сколько раз уменьшать картинку, список значений.
+    # Дальше берётся среднее арифметическое.
+    noise_sizes = [2, 4, 8] 
+
+    for noise_size in noise_sizes:
+        # Уменьшаем изображение
+        downscale = torch.nn.functional.interpolate(
+            img_tensor.unsqueeze(0), # создать псевдо ОСь с размером батча 
+            scale_factor=1.0 / noise_size, mode='bilinear', align_corners=False
+        ).squeeze(0) # отбросить псевдо ось
+
+        # Добавляем шум в уменьшенное изображение
+        noise_small = torch.randn_like(downscale, device=device) * noise_factor
+        downscale = torch.clamp(downscale + noise_small, 0, 1)
+    
+        # Увеличиваем обратно
+        upscaled = torch.nn.functional.interpolate(
+            downscale.unsqueeze(0), scale_factor=noise_size, mode='bilinear', align_corners=False
+        ).squeeze(0)
+
+        img_tensor = img_tensor + upscaled
+
+    img_tensor = torch.clamp(img_tensor / (len(noise_sizes) + 1), 0, 1)
+    
+
+    if (random.random() < 0.005):
+        test = 1
+        show_image(img_tensor.cpu().numpy().transpose(1, 2, 0), test)
+    #     thread = threading.Thread(target=show_image, args=(img_tensor.cpu().numpy().transpose(1, 2, 0),))
+    #     # print(thread, end="")
+    #     thread.start()
+
+    return img_tensor
 
 def augment_batch(img_tensor_batch, coords_tensor_batch, device,
                    displace: int, rotate=0, noise=0.0):
@@ -60,6 +94,8 @@ def augment_batch(img_tensor_batch, coords_tensor_batch, device,
             print("image is not square!")
             return None
         
+        img = img[[2,1,0],:,:] # Каналы обратно вернуть
+
         anglelim = rotate
         angle = np.random.uniform(-anglelim, anglelim)
 
@@ -91,7 +127,7 @@ def augment_batch(img_tensor_batch, coords_tensor_batch, device,
         #                         cornery, cornery + newsize, prevsize)
         
         if(noise > 0):
-            img = noise_tensor(img.to('cpu'), noise).to(device)
+            img = noise_tensor(img, noise)
         
         imglist.append(img)
         coordlist.append(coords)
@@ -102,7 +138,7 @@ def make_filter(*keypoints: list):
         return torch.stack([coordbatch[:, k] for k in keypoints]).permute(1, 0, 2)
     return kpfilter
 
-def augment_gen(dataset: list, epochs: int = 1, device = 'cpu', part = 0.8, 
+def augment_gen(dataset: list, epochs: int = 1, device = 'cuda:0' if torch.cuda.is_available() else 'cpu', part = 0.8, 
                 displace: int = 50, rotate: int = 30, noise: float = 0.1, verbose = False):
     '''
     returns generator of augmented images. 
