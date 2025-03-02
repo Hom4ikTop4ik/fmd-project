@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import torch
-import torchvision.transforms.functional as F
+# import torchvision.transforms.functional as F
 import random
 
 __all__ = ['augment_batch', 'augment_gen', 'make_filter']

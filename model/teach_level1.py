@@ -82,6 +82,7 @@ for bt_images, bt_coords in augment_gen(dataset, epochs=10, device=device,
                                         noise=0, part=0.9, displace=80, rotate=20):
     
     truth = coordfilter(bt_coords)[:, :, 0:2]
+    
     ans = lvl1det(bt_images)
     loss = criterion(ans, truth)
     optimizer.zero_grad()
