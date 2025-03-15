@@ -85,4 +85,3 @@ def load(
 
     print(f"\n\tnum_workers: {num_workers}, pin_memory: {pin}, persistent_workers: {num_workers > 0}, prefetch_factor: {prefetch_factor}\n")
     return dataloader
-

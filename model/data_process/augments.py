@@ -7,11 +7,6 @@ import time
 
 __all__ = ['make_filter']
 
-dCWant = False
-def devChecker(img):
-    if dCWant and (str(img.device) == 'cpu'):
-        print(f"\n\n\n\t\t{str(img.device)}\n\n\n")
-
 frequency = 0.1
 show = False
 
@@ -59,7 +54,6 @@ def show_image(img_to_print):
     return name
 
 def noise_tensor(img, noise_factor, verbose = False):
-    devChecker(img)
     if verbose:
         print("augments.py/noise_tensor/device:" + str(img.device))
 
@@ -183,8 +177,6 @@ def in_paint(img):
     return img
 
 def augment_image(img, coords, displace: int, rotate=0, noise=0.0):
-    devChecker(img)
-
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None

@@ -12,30 +12,28 @@ from data_process import load, noise, displace, rotate
 from data_process import USE_CPU_WHATEVER
 from cascade_detector import Level1Detector
 
+global dataset, device, lvl1det, optimizer, criterion, coordfilter
+
 def interactor(signal, frame):
     print('SIGINT was received.')
     while (True):
-        cmd = input('Choose action: save/test/exit/look (continue by default): ')
+        cmd = input('Choose action: save/exit (continue by default): ')
         match cmd:
             case 'save':
                 path = weight_save_path
                 print(f'saving to {path}')
                 torch.save(lvl1det.state_dict(), path)
-            case 'test':
-                model_test(look=False)
             case 'учше':
                 sys.exit(0)
             case 'exit':
                 sys.exit(0)
-            case 'look':
-                model_test(look=True)
+
 
 def model_test(look=False):
     with torch.no_grad():
         iteration = 0
         loss = 0.0
-        for bt_images, bt_coords in augment_gen(dataset, epochs=1, device=device, 
-                                                noise=0, part=-0.1, verbose=True):
+        for bt_images, bt_coords in iter(dataset):
             
             truth = coordfilter(bt_coords)[:, :, 0:2]
             ans = lvl1det(bt_images)
@@ -59,6 +57,7 @@ def look_predict(imgtens: torch.Tensor, predict: torch.Tensor):
     
     cv2.imshow("img", newimg)
     cv2.waitKey(0)
+
 
 def print_progress_bar(iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
     percent = (iteration / total) * 100
@@ -84,8 +83,7 @@ registry_path = os.path.join(current_path, 'registry')
 weight_save_path = os.path.join(registry_path, 'weights', 'lvl1det_bns.pth')
 
 
-dataset = None
-
+signal.signal(signal.SIGINT, interactor)
 def main():
     global dataset, device, lvl1det, optimizer, criterion, coordfilter
     
@@ -102,9 +100,6 @@ def main():
     )
     print("Finish load dataset with time: {}".format(time.time()))
 
-
-    signal.signal(signal.SIGINT, interactor)
-
     lvl1det = Level1Detector(device).to(device)
 
     if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
@@ -114,78 +109,78 @@ def main():
     criterion = nn.MSELoss().to(device)
     coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
 
-
-    # Learning cycle
-    pupupu = time.time()
-    print(f"Start epochs with time: {pupupu:.2f}")
-    for epoch in range(epochs):
-        print(f'Starting Epoch {epoch + 1}/{epochs}')
-        print(f'Start time: {time.time() - pupupu:.2f} Device: {device}, Noise: {noise}, Displace: {displace}, Rotate: {rotate}')
-
-        iter_times = []
-        iter_loss = []
-        average_loss = 1
-        median_loss = 1
-    
-        dataloader = iter(dataset)
-
-        for iteration in range(1, total_iterations + 1):
-            bt_images, bt_coords = next(dataloader)
-            # Move tensors to the device
-            bt_images = bt_images.to(device)
-            bt_coords = bt_coords.to(device)
-
-            # Training code
-            truth = coordfilter(bt_coords)[:, :, 0:2] 
-            ans = lvl1det(bt_images)
-            loss = criterion(ans, truth)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            # Print device information
-            # print(f'Model is on device: {next(lvl1det.parameters()).device}')
-            # print(f'Input images are on device: {bt_images.device}')
-
-            # Record the time taken for this iteration
-            iter_times.append(time.time())
-            iter_loss.append(loss)
-            l = len(iter_times)
-
-            # Keep only the last k times
-            if l > iter_k:
-                iter_times.pop(0)
-                iter_loss.pop(0)
-
-            # Calculate iterations per second
-            if (l > 1):
-                iter_per_second = l / (iter_times[-1] - iter_times[0])
-            else:
-                iter_per_second = 0.00
-            if (l > 0):
-                average_loss = sum(iter_loss) / len(iter_loss)
-                median_loss = iter_loss[l // 2]
-            # print(f"Iterations per second: {iter_per_second:.2f}")
-            
-            # Update the progress bar
-            print_progress_bar(iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
-        print("\n")
-    
-    print(f"End epichs time: {time.time() - pupupu:.2f}")
-
-    # Save after every iterations
-    if (input("Do you wanna save weigths? (y/n) ")[0] in 'yYнН'):
-        postfix = input(f"Enter a postfix (enter - save to {weight_save_path}): ")
-        if (postfix == ""):
-            path = weight_save_path
+    a1 = input("train or test?")
+    if (a1 != "train"):
+        a2 = input("test or look?")
+        if (a2 == "test"):
+            model_test(look = False)
         else:
-            path = os.path.join(registry_path, 'weights', f'lvl1det_bns_{postfix}.pth')
+            model_test(look = True)
+    else:
+        # Learning cycle
+        pupupu = time.time()
+        print(f"Start epochs with time: {pupupu:.2f}")
+        for epoch in range(epochs):
+            print(f'Starting Epoch {epoch + 1}/{epochs}')
+            print(f'Start time: {time.time() - pupupu:.2f} Device: {device}, Noise: {noise}, Displace: {displace}, Rotate: {rotate}')
+
+            iter_times = []
+            iter_loss = []
+            average_loss = 1
+            median_loss = 1
         
-        print(f'saving to {path}')
-        torch.save(lvl1det.state_dict(), path)
+            dataloader = iter(dataset)
+
+            for iteration in range(1, total_iterations + 1):
+                bt_images, bt_coords = next(dataloader)
+                # Move tensors to the device
+                bt_images = bt_images.to(device)
+                bt_coords = bt_coords.to(device)
+
+                # Training code
+                truth = coordfilter(bt_coords)[:, :, 0:2] 
+                ans = lvl1det(bt_images)
+                loss = criterion(ans, truth)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                # Record the time taken for this iteration
+                iter_times.append(time.time())
+                iter_loss.append(loss)
+                l = len(iter_times)
+
+                # Keep only the last k times
+                if l > iter_k:
+                    iter_times.pop(0)
+                    iter_loss.pop(0)
+
+                # Calculate iterations per second
+                if (l > 1):
+                    iter_per_second = l / (iter_times[-1] - iter_times[0])
+                else:
+                    iter_per_second = 0.00
+                if (l > 0):
+                    average_loss = sum(iter_loss) / len(iter_loss)
+                    median_loss = iter_loss[l // 2]
+                
+                # Update the progress bar
+                print_progress_bar(iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
+            print("\n")
+        
+        print(f"End epichs time: {time.time() - pupupu:.2f}")
+
+        # Save after every iterations
+        if (input("Do you wanna save weigths? (y/n) ")[0] in 'yYнН'):
+            postfix = input(f"Enter a postfix (enter - save to {weight_save_path}): ")
+            if (postfix == ""):
+                path = weight_save_path
+            else:
+                path = os.path.join(registry_path, 'weights', f'lvl1det_bns_{postfix}.pth')
+            
+            print(f'saving to {path}')
+            torch.save(lvl1det.state_dict(), path)
 
 
 if __name__ == "__main__":
     main()
-    # cProfile.run("main()")
-# print("\n\t\t\t" + __name__ + "\n")

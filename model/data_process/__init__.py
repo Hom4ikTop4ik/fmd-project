@@ -5,7 +5,7 @@ from .utils import *
 
 noise = 0.05
 displace = 80
-rotate = 20
+rotate = 45
 
 DA = True
 NET = False
