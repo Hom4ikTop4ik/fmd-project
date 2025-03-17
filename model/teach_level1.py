@@ -133,6 +133,7 @@ def main():
 
             for iteration in range(1, total_iterations + 1):
                 bt_images, bt_coords = next(dataloader)
+
                 # Move tensors to the device
                 bt_images = bt_images.to(device)
                 bt_coords = bt_coords.to(device)

@@ -5,7 +5,7 @@ import numpy as np
 import re
 
 from torch.utils.data import Dataset, DataLoader
-from data_process.__init__ import noise, displace, rotate
+from data_process.__init__ import noise, displace, rotate, min_scale, max_scale
 from data_process.augments import augment_image
 from data_process.__init__ import USE_CPU_WHATEVER
 
@@ -44,7 +44,8 @@ class CustomDataset(Dataset):
         coords = torch.from_numpy(np.loadtxt(coords_path)).float()
 
         if self.aug:
-            image, coords = augment_image(image, coords, displace, rotate, noise)
+            scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
+            image, coords = augment_image(image, coords, displace, rotate, noise, scale)
 
         image = image.to(self.device)
         coords = coords.to(self.device)        

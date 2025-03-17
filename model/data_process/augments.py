@@ -14,6 +14,7 @@ show = False
 # mean заполняет средним цветом картинки (такое себе)
 angleFiller = "INPAINT" # or "MEAN"
 
+interpolate_mode = 'bicubic' # or 'linear', 'bilinear', 'nearest'
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -35,109 +36,102 @@ def rotate_coords(coords, angle_degrees):
         coords[i][1] = vecp[1] + 0.5
     return coords
 
-def crop_coords(coords, left, right, top, bottom, prevsize):
+def crop_coords_big(coords, left, right, top, bottom, prevsize):
     for i in range(coords.shape[0]):
-        x, y = coords[i][0] * prevsize, coords[i][1] * prevsize
+        x = coords[i][0] * prevsize[0]
+        y = coords[i][1] * prevsize[1]
         x -= left
         y -= top
         coords[i][0] = x / float(right - left)
         coords[i][1] = y / float(bottom - top)
     return coords
 
+def crop_coords_small(coords, left, right, top, bottom, prevsize):
+    for i in range(coords.shape[0]):
+        x = (coords[i][0] * (right - left) + left) / prevsize[0]
+        y = (coords[i][1] * (bottom - top) + top) / prevsize[1]
+        coords[i][0] = x
+        coords[i][1] = y
+    return coords
+
 def show_image(img_to_print):
     name = "img" + str(random.randint(0, 1000))
-    cv2.imshow(name, img_to_print)
+    cv2.imshow(name, img_to_print.cpu().numpy().transpose(1, 2, 0))
     cv2.waitKey(0)
     # Для продолжения жмякнуть клавишу в любом активном окне с фото, 
     #   чтобы продолжить работу НЕ закрывая окно 
     # (возможны временные зависания)
     return name
 
+def show_image2(img, coords):
+    name = "img" + str(random.randint(0, 1000))
+    newimg = (img.cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
+
+    newimg = np.ascontiguousarray(newimg)
+    for coord in coords:
+        x, y = coord[0], coord[1]
+        newimg = cv2.circle(newimg, (int(x * newimg.shape[1]), int(y * newimg.shape[0])), 2, (255, 255, 255), 2)
+    
+    cv2.imshow(name, newimg)
+    cv2.waitKey(0)
+
+def scale_img(img, scale, mode):
+    if mode == 'linear':
+        scale = torch.nn.functional.interpolate(
+            img,
+            scale_factor = scale, 
+            mode = mode, 
+            align_corners = False
+        )
+    elif mode == 'bilinear':
+        scale = torch.nn.functional.interpolate(
+            img.unsqueeze(0), # создать псевдо ОСь с размером батча 
+            scale_factor = scale, 
+            mode = mode, 
+            align_corners = False
+        ).squeeze(0) # отбросить псевдо ось
+    elif mode == 'nearest':
+        scale = torch.nn.functional.interpolate(
+            img,
+            scale_factor = scale, 
+            mode = mode
+        )
+    elif mode == 'bicubic':
+        scale = torch.nn.functional.interpolate(
+            img.unsqueeze(0),
+            scale_factor = scale, 
+            mode = mode, 
+            align_corners = False
+        ).squeeze(0)
+    
+    return scale
+
 def noise_tensor(img, noise_factor, verbose = False):
     if verbose:
         print("augments.py/noise_tensor/device:" + str(img.device))
 
-    # Добавляем гауссовский шум
-    noise = torch.randn_like(img, device=img.device) * noise_factor
-    img = torch.clamp(img + noise, 0, 1)
-    
     # Во сколько раз уменьшать картинку, список значений.
     # Дальше берётся среднее арифметическое.
-    noise_sizes = [] 
-
+    noise_sizes = [1, 2, 4, 8] # if empty, no add noise
+    
+    img_copy = img
+    
     for noise_size in noise_sizes:
         # # Уменьшаем изображение
-        mode = 'bicubic' # or 'linear', 'bilinear', 'nearest'
-
-        if mode == 'linear':
-            downscale = torch.nn.functional.interpolate(
-                img,
-                scale_factor = 1.0 / noise_size, 
-                mode = mode, 
-                align_corners = False
-            )
-        elif mode == 'bilinear':
-            downscale = torch.nn.functional.interpolate(
-                img.unsqueeze(0), # создать псевдо ОСь с размером батча 
-                scale_factor = 1.0 / noise_size, 
-                mode = mode, 
-                align_corners = False
-            ).squeeze(0) # отбросить псевдо ось
-        elif mode == 'nearest':
-            downscale = torch.nn.functional.interpolate(
-                img,
-                scale_factor = 1.0 / noise_size, 
-                mode = mode
-            )
-        elif mode == 'bicubic':
-            downscale = torch.nn.functional.interpolate(
-                img.unsqueeze(0),
-                scale_factor = 1.0 / noise_size, 
-                mode = mode, 
-                align_corners = False
-            ).squeeze(0)
-
+        downscaled = scale_img(img_copy, 1.0 / noise_size, mode = interpolate_mode)
 
         # Добавляем шум в уменьшенное изображение
-        noise_small = torch.randn_like(downscale, device=img.device) * noise_factor
-        downscale = torch.clamp(downscale + noise_small, 0, 1)
+        noise_small = torch.randn_like(downscaled, device=img.device) * noise_factor
+        downscaled = downscaled + noise_small
+        # downscaled = torch.clamp(downscaled, 0, 1)
     
         # # Увеличиваем обратно
-        if mode == 'linear':
-            upscaled = torch.nn.functional.interpolate(
-                downscale,
-                scale_factor = noise_size, 
-                mode = mode, 
-                align_corners = False
-            )
-        elif mode == 'bilinear':
-            upscaled = torch.nn.functional.interpolate(
-                downscale.unsqueeze(0),
-                scale_factor = noise_size, 
-                mode = mode, 
-                align_corners = False
-            ).squeeze(0)
-        elif mode == 'nearest':
-            upscaled = torch.nn.functional.interpolate(
-                downscale,
-                scale_factor = noise_size, 
-                mode = mode
-            )
-        elif mode == 'bicubic':
-            upscaled = torch.nn.functional.interpolate(
-                downscale.unsqueeze(0),
-                scale_factor = noise_size, 
-                mode = mode, 
-                align_corners = False
-            ).squeeze(0)
-
+        upscaled = scale_img(downscaled, noise_size, mode = interpolate_mode)
+        
         img = img + upscaled
 
-    img = torch.clamp(img / (len(noise_sizes) + 1), 0, 1)
+    img = torch.clamp(img / float(len(noise_sizes) + 1), 0, 1)
 
-    if show and random.random() < frequency:
-        show_image(img.cpu().numpy().transpose(1, 2, 0))
-       
     return img
 
 def in_paint(img):
@@ -176,7 +170,7 @@ def in_paint(img):
         img = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device) / 255.0  # H x W x C -> C x H x W и нормализация
     return img
 
-def augment_image(img, coords, displace: int, rotate=0, noise=0.0):
+def augment_image(img, coords, displace: int, rotate=0, noise=0.0, scale=1.0):
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None
@@ -186,34 +180,58 @@ def augment_image(img, coords, displace: int, rotate=0, noise=0.0):
 
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
-    
+    angle = angle.item()
+
+    if (scale == 1.0):
+        pass
+    elif (scale < 1.0):
+        x, y = img.shape[1], img.shape[2]
+        down_scale_img = scale_img(img, scale, mode = interpolate_mode)
+        # down_scale_img = F.resize(img, (int(x * scale), int(y * scale)), fill=(0, 0, 0))
+        small_x, small_y = down_scale_img.shape[1], down_scale_img.shape[2]
+        
+        cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
+        cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
+
+        background = torch.zeros_like(img)
+        background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
+        img = background
+        prevsize = (x, y)
+        coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
+    elif (scale > 1.0):
+        x, y = img.shape[1], img.shape[2]
+
+        big_x = int(x * scale)
+        big_y = int(y * scale)
+        up_scale_img = scale_img(img, scale, mode = interpolate_mode)
+        # up_scale_img = F.interpolate(img.unsqueeze(0), size=(big_x, big_y), mode=interpolate_mode, align_corners=False).squeeze(0)
+
+        # Обрезка до исходного размера
+        cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
+        cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
+        img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
+        img = img_cropped
+        prevsize = (big_x, big_y)
+        coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
+
+    # Заполнение чёрных углов и контуров цветом
     if angleFiller == "MEAN":
         mean_color = img.mean(dim=[1, 2])
-        img = F.rotate(img, angle.item(), fill=tuple(mean_color))
+        img = F.rotate(img, angle, fill=tuple(mean_color))
         
     elif angleFiller == "INPAINT":
     # Заменяем средний цвет на черный (для удобства)
         black_color = (0, 0, 0)  # Черный цвет для заполнения
-        img = F.rotate(img, angle.item(), fill=black_color)
+        img = F.rotate(img, angle, fill=black_color)
         img = in_paint(img) # instead of mean color
     
     # Вращение координат
-    coords = rotate_coords(coords, angle.item())
-
-    prevsize = img.shape[1]
-    newsize = prevsize - displace
-
-    # Случайное смещение обрезки
-    cornerx = torch.randint(0, prevsize - newsize, (1,), device=img.device).item()
-    cornery = torch.randint(50, prevsize - newsize, (1,), device=img.device).item()
-
-    img = img[:, cornery:cornery + newsize, cornerx:cornerx + newsize]
-    coords = crop_coords(coords, cornerx, cornerx + newsize, cornery, cornery + newsize, prevsize)
+    coords = rotate_coords(coords, angle)
 
     # Добавление шума
     if noise > 0:
         img = noise_tensor(img, noise)
-    
+
     return img, coords
 
 
