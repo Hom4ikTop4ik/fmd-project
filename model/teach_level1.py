@@ -171,7 +171,7 @@ def main():
         
         print(f"End epichs time: {time.time() - pupupu:.2f}")
 
-        # Save after every iterations
+        # Save after all iterations
         if (input("Do you wanna save weigths? (y/n) ")[0] in 'yYнН'):
             postfix = input(f"Enter a postfix (enter - save to {weight_save_path}): ")
             if (postfix == ""):

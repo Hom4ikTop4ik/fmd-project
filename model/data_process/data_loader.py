@@ -5,9 +5,29 @@ import numpy as np
 import re
 
 from torch.utils.data import Dataset, DataLoader
-from data_process.__init__ import noise, displace, rotate, min_scale, max_scale
+from data_process.__init__ import noise, rotate, min_scale, max_scale
 from data_process.augments import augment_image
 from data_process.__init__ import USE_CPU_WHATEVER
+
+from torch.utils.data import Sampler
+import random
+
+class EpochShuffleSampler(Sampler):
+    def __init__(self, data_len, seed=0):
+        self.data_len = data_len
+        self.seed = seed
+
+    def set_seed(self, seed):
+        self.seed = seed
+
+    def __iter__(self):
+        g = torch.Generator()
+        g.manual_seed(self.seed)
+        indices = torch.randperm(self.data_len, generator=g).tolist()
+        return iter(indices)
+
+    def __len__(self):
+        return self.data_len
 
 class CustomDataset(Dataset):
     def __init__(self, images_dir, coords_dir, device, aug):
@@ -45,7 +65,7 @@ class CustomDataset(Dataset):
 
         if self.aug:
             scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
-            image, coords = augment_image(image, coords, displace, rotate, noise, scale)
+            image, coords = augment_image(image, coords, rotate, noise, scale)
 
         image = image.to(self.device)
         coords = coords.to(self.device)        
@@ -68,8 +88,9 @@ def load(
     coords_dir_full = os.path.join(dataset_path, coords_dir)
     
     dataset = CustomDataset(images_dir_full, coords_dir_full, device, True)
+    sampler = EpochShuffleSampler(len(dataset))
     
-    num_workers = 8
+    num_workers = 1
     prefetch_factor = None if (num_workers > 0) else None
     pin = not torch.cuda.is_available() or USE_CPU_WHATEVER
 
@@ -77,12 +98,13 @@ def load(
     dataloader = DataLoader(
         dataset, 
         batch_size=bsize, 
-        shuffle=True, 
         num_workers=num_workers, 
         pin_memory=pin, 
         persistent_workers=(num_workers > 0),
-        prefetch_factor=prefetch_factor
+        prefetch_factor=prefetch_factor,
+        # shuffle=True, 
+        sampler=sampler
     )
 
     print(f"\n\tnum_workers: {num_workers}, pin_memory: {pin}, persistent_workers: {num_workers > 0}, prefetch_factor: {prefetch_factor}\n")
-    return dataloader
+    return dataloader, sampler

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import torch
-# import torchvision.transforms.functional as F
+import torchvision.transforms.functional as F
 import random
 import time
 
@@ -142,18 +142,16 @@ def in_paint(img):
     img_cv = np.clip(img_cv*255, 0, 255).astype(np.uint8)  # Преобразуем в формат uint8
 
     if SCALE != 1:
-        img_resized = cv2.resize(img_cv, (img_cv.shape[1] // SCALE, img_cv.shape[0] // SCALE))  # Уменьшаем в 4 раза
+        img_resized = cv2.resize(img_cv, (img_cv.shape[1] // SCALE, img_cv.shape[0] // SCALE))
 
         mask = np.all(img_resized == [0, 0, 0], axis=-1).astype(np.uint8)  # Математическая маска для черных углов
 
-        # Применяем inpainting на уменьшенном изображении
-        inpainted_resized_img = cv2.inpaint(img_resized, mask, inpaintRadius=inpaintRadius, flags=cv2.INPAINT_TELEA)
+        inpainted_small_img = cv2.inpaint(img_resized, mask, inpaintRadius=inpaintRadius, flags=cv2.INPAINT_TELEA)
 
-        # Возвращаем изображение в исходный размер
-        inpainted_img = cv2.resize(inpainted_resized_img, (img_cv.shape[1], img_cv.shape[0]))
+        inpainted_img = cv2.resize(inpainted_small_img, (img_cv.shape[1], img_cv.shape[0]))
         
-        # Наложение на черные углы оригинала
-        mask_black_areas = np.all(img_cv == [0, 0, 0], axis=-1)  # Черные области (углы)
+        # Наложение на черные области оригинала
+        mask_black_areas = np.all(img_cv == [0, 0, 0], axis=-1)  # Черные области
         img_cv[mask_black_areas] = inpainted_img[mask_black_areas]
 
         # Преобразуем обратно в формат PyTorch
@@ -170,7 +168,7 @@ def in_paint(img):
         img = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device) / 255.0  # H x W x C -> C x H x W и нормализация
     return img
 
-def augment_image(img, coords, displace: int, rotate=0, noise=0.0, scale=1.0):
+def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None
@@ -231,6 +229,10 @@ def augment_image(img, coords, displace: int, rotate=0, noise=0.0, scale=1.0):
     # Добавление шума
     if noise > 0:
         img = noise_tensor(img, noise)
+
+    # show_image2(img, coords)
+    img = scale_img(img, 432/512, interpolate_mode)
+    # show_image2(img, coords)
 
     return img, coords
 
