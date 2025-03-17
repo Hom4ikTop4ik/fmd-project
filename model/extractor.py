@@ -3,7 +3,7 @@
 # expression_params 50
 import os
 import torch
-from flame_pytorch import convert, draw_and_show_points, map_points
+from flame_pytorch_m import convert, draw_and_show_points, map_points
 
 from data_process import load
 
@@ -101,7 +101,7 @@ def extract(truth: torch.Tensor, show=False):
         params = (shape_p, pose_p, expr_p)
 
         print('iter: ', i)
-    conv_iters_shape = 40
+    conv_iters_shape = 20
     step_size = 0.2
     for i in range(conv_iters_shape):
         shape_grads, pose_grads, expr_grads = calc_grads(

@@ -108,7 +108,7 @@ for bt_images, bt_coords in augment_gen(dataset, epochs=10, device=device,
     iteration += 1
     print(f'loss {loss:.5f}, iteration: {iteration}')
 
-    if iteration % 1500 == 0:
+    if iteration % 2500 == 0:
         dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, 68).permute(0, 2, 1)
         dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, 68).permute(0, 2, 1)
         print('dec ans shape: ', dec_answer.shape)
