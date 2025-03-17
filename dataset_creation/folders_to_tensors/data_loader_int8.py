@@ -15,7 +15,7 @@ def getNumStr(coordsFileName):
 def getImgName(coordsFileName):
     return "dataimg" + getNumStr(coordsFileName) + ".jpeg"
 
-def load(coordsFolder, imgFolder, fromid, toid): 
+def load(coordsFolder, imgFolder, fromid = 0, toid = 0): 
     coords_t_list = []
     images_t_list = []
     coordlist = os.listdir(coordsFolder)
