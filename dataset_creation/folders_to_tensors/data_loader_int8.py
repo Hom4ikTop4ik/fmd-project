@@ -9,6 +9,8 @@ from torchvision import transforms
 import torchvision.transforms.functional as F
 import random
 
+DOTS = 68
+
 def getNumStr(coordsFileName):
     return coordsFileName[-12:-7]
 
@@ -48,7 +50,7 @@ def load(coordsFolder, imgFolder, fromid = 0, toid = 0):
         coords_tensor = torch.tensor(all_coords, dtype=torch.float32)
         coordsFile.close()
         
-        if coords_tensor.shape[0] != 68:
+        if coords_tensor.shape[0] != DOTS:
             continue
         
         coords_t_list.append(coords_tensor)

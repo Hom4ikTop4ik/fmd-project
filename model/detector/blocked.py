@@ -30,6 +30,9 @@ class Head(nn.Module):
         x = self.fc2(x)
         return x
 
+def print1(x):
+    # print(x)
+    pass
 
 class MultyLayer(nn.Module):
     def __init__(self, device):
@@ -55,24 +58,24 @@ class MultyLayer(nn.Module):
 
     def forward(self, x):
         # Input: [batch, 3, H, W]
-        print(x.shape)
+        print1(x.shape)
         x = self.pulconv(x)
-        print(x.shape)
+        print1(x.shape)
         x = self.bn1(self.cblock1(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn2(self.cblock2(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn3(self.cblock3(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn4(self.cblock4(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn5(self.cblock5(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn6(self.cblock6(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.bn7(self.cblock7(x))
-        print(x.shape)
+        print1(x.shape)
         x = self.head(x)
-        print(x.shape)
+        print1(x.shape)
         x = x.view(-1, 20)
         return x

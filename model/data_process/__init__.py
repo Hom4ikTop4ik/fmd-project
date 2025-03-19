@@ -19,3 +19,4 @@ iter_k = 20
 DA = True
 NET = False
 USE_CPU_WHATEVER = NET
+PROGRESS_BAR = DA

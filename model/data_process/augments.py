@@ -12,9 +12,11 @@ show = False
 
 # inpaint дорисовывает углы на основе картинки
 # mean заполняет средним цветом картинки (такое себе)
-angleFiller = "INPAINT" # or "MEAN"
+# (mean оставляет странный средний чёрный квадрат) 
+angleFiller = "INPAINT" # "INPAINT" or "MEAN"
 
-interpolate_mode = 'bicubic' # or 'linear', 'bilinear', 'nearest'
+interpolate_mode = 'nearest' # 'nearest','bicubic' or 'bilinear'. no linear, its only for 1D, picture is 2D :(
+# nearest - the fastest, the шакал'est
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -76,14 +78,7 @@ def show_image2(img, coords):
     cv2.waitKey(0)
 
 def scale_img(img, scale, mode):
-    if mode == 'linear':
-        scale = torch.nn.functional.interpolate(
-            img,
-            scale_factor = scale, 
-            mode = mode, 
-            align_corners = False
-        )
-    elif mode == 'bilinear':
+    if mode == 'bilinear':
         scale = torch.nn.functional.interpolate(
             img.unsqueeze(0), # создать псевдо ОСь с размером батча 
             scale_factor = scale, 
@@ -92,10 +87,10 @@ def scale_img(img, scale, mode):
         ).squeeze(0) # отбросить псевдо ось
     elif mode == 'nearest':
         scale = torch.nn.functional.interpolate(
-            img,
+            img.unsqueeze(0),
             scale_factor = scale, 
             mode = mode
-        )
+        ).squeeze(0)
     elif mode == 'bicubic':
         scale = torch.nn.functional.interpolate(
             img.unsqueeze(0),
@@ -180,41 +175,48 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
     angle = angle.item()
 
+    if angleFiller == "MEAN":
+        mean_color = img.mean(dim=[1, 2])
+
     if (scale == 1.0):
         pass
     elif (scale < 1.0):
         x, y = img.shape[1], img.shape[2]
-        down_scale_img = scale_img(img, scale, mode = interpolate_mode)
-        # down_scale_img = F.resize(img, (int(x * scale), int(y * scale)), fill=(0, 0, 0))
-        small_x, small_y = down_scale_img.shape[1], down_scale_img.shape[2]
-        
-        cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
-        cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
+        small_x = int(x * scale)
+        small_y = int(y * scale)
 
-        background = torch.zeros_like(img)
-        background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
-        img = background
-        prevsize = (x, y)
-        coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
+        if (x > small_x):
+            down_scale_img = scale_img(img, scale, mode = interpolate_mode)
+            # down_scale_img = F.resize(img, (int(x * scale), int(y * scale)), fill=(0, 0, 0))
+            
+            cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
+            cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
+
+            background = torch.zeros_like(img)
+            background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
+            img = background
+            prevsize = (x, y)
+            coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
+
     elif (scale > 1.0):
         x, y = img.shape[1], img.shape[2]
 
         big_x = int(x * scale)
         big_y = int(y * scale)
-        up_scale_img = scale_img(img, scale, mode = interpolate_mode)
-        # up_scale_img = F.interpolate(img.unsqueeze(0), size=(big_x, big_y), mode=interpolate_mode, align_corners=False).squeeze(0)
+        if (big_x > x):
+            up_scale_img = scale_img(img, scale, mode = interpolate_mode)
+            # up_scale_img = F.interpolate(img.unsqueeze(0), size=(big_x, big_y), mode=interpolate_mode, align_corners=False).squeeze(0)
 
-        # Обрезка до исходного размера
-        cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
-        cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
-        img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
-        img = img_cropped
-        prevsize = (big_x, big_y)
-        coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
+            # Обрезка до исходного размера
+            cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
+            cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
+            img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
+            img = img_cropped
+            prevsize = (big_x, big_y)
+            coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
 
     # Заполнение чёрных углов и контуров цветом
     if angleFiller == "MEAN":
-        mean_color = img.mean(dim=[1, 2])
         img = F.rotate(img, angle, fill=tuple(mean_color))
         
     elif angleFiller == "INPAINT":
@@ -230,9 +232,8 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     if noise > 0:
         img = noise_tensor(img, noise)
 
-    # show_image2(img, coords)
-    img = scale_img(img, 432/512, interpolate_mode)
-    # show_image2(img, coords)
+    # only if Ilya wants, but it still works without 432px
+    # img = scale_img(img, 432/512, interpolate_mode)
 
     return img, coords
 

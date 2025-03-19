@@ -8,10 +8,10 @@ import numpy as np
 import time
 
 from data_process import make_filter
-from data_process import load, noise, displace, rotate
+from data_process import load, noise, rotate
 from data_process import USE_CPU_WHATEVER
 from cascade_detector import Level1Detector
-
+displace = 80
 global dataset, device, lvl1det, optimizer, criterion, coordfilter
 
 def interactor(signal, frame):
@@ -23,18 +23,31 @@ def interactor(signal, frame):
                 path = weight_save_path
                 print(f'saving to {path}')
                 torch.save(lvl1det.state_dict(), path)
+            case 'test':
+                model_test(look=False)
+            case 'look':
+                model_test(look=True)
+
+            case 'exit':
+                sys.exit(0)
             case 'учше':
                 sys.exit(0)
-            case 'exit':
+            case 'clear':
+                sys.exit(0)
+            case 'сдуфк':
                 sys.exit(0)
 
 
 def model_test(look=False):
+    print('a')
     with torch.no_grad():
         iteration = 0
         loss = 0.0
+        pupupu = time.time()
+        print('a')
+        print(pupupu)
         for bt_images, bt_coords in iter(dataset):
-            
+            print(f"{(time.time() - pupupu) : 0.2f}")
             truth = coordfilter(bt_coords)[:, :, 0:2]
             ans = lvl1det(bt_images)
             loss += criterion(ans, truth)
@@ -82,9 +95,12 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_path, 'registry')
 weight_save_path = os.path.join(registry_path, 'weights', 'lvl1det_bns.pth')
 
+def passer(a,b):
+    return
+signal.signal(signal.SIGINT, passer)
 
-signal.signal(signal.SIGINT, interactor)
 def main():
+    signal.signal(signal.SIGINT, interactor)
     global dataset, device, lvl1det, optimizer, criterion, coordfilter
     
     device = 'cpu'
@@ -93,7 +109,7 @@ def main():
     print("devise is: ", device)
 
     print("Start  load dataset with time: {}".format(time.time()))
-    dataset = load(
+    dataset, sampler = load(
         bsize=batch_size, 
         dataset_path=os.path.join(current_path, registry_path, 'dataset', 'train'),
         device=device
