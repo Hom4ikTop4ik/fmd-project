@@ -1,5 +1,4 @@
 model/registry/*
 model/flame_pytorch/model/*
 **/__pycache__
-venv/*
 model/logs/*
