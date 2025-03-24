@@ -98,6 +98,7 @@ def load(size: int, bsize: int,
     images = torch.load(os.path.join(dataset_path, coordsfile))
     coords = torch.load(os.path.join(dataset_path, imagesfile))
     dataset = []
+    print(coords.shape)
     for batch_id in range(0, size):
         imagesbatch = [images[i + batch_id * bsize] for i in range(0, bsize)]
         coordsbatch = [depth_permute(coords[i + batch_id * bsize]) for i in range(0, bsize)]

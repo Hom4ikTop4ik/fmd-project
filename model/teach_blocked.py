@@ -72,7 +72,8 @@ def gen_lim(generator, limit):
 current_path = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_path, 'registry')
 weight_save_path = os.path.join(registry_path, 'weights', 'model_bns.pth')
-dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'))
+dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'), 
+               imagesfile='dataset_coords_ext.pt')
 
 # establishing devices and signal handler
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -84,20 +85,21 @@ model = MultyLayer(device).to(device)
 # if input('load weigths from selected weight save path? (y/n) ') == 'y':
 #     model.load_state_dict(torch.load(weight_save_path))
 
-optimizer = torch.optim.Adam(model.parameters(), 0.001, betas=(0.9, 0.95))
+optimizer = torch.optim.AdamW(model.parameters(), 0.001, betas=(0.9, 0.99))
 criterion = nn.MSELoss().to(device)
-coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
 
 mypca = MakerPCA()
-mypca.load(os.path.join(current_path,'data_process/pcaweights.pca'))
+
+
+mypca.load(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
+
 
 # learning cycle
 iteration = 0
 for bt_images, bt_coords in augment_gen(dataset, epochs=10, device=device,
                                         noise=0, part=0.9, displace=80, rotate=20):
-    
+    print(bt_coords.shape)
     truth = mypca.compress(bt_coords).to(device)
-
     ans = model(bt_images)
     loss = criterion(ans, truth)
     optimizer.zero_grad()
@@ -109,8 +111,8 @@ for bt_images, bt_coords in augment_gen(dataset, epochs=10, device=device,
     print(f'loss {loss:.5f}, iteration: {iteration}')
 
     if iteration % 2500 == 0:
-        dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, 68).permute(0, 2, 1)
-        dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, 68).permute(0, 2, 1)
+        dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, 72).permute(0, 2, 1)
+        dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, 72).permute(0, 2, 1)
         print('dec ans shape: ', dec_answer.shape)
         print('dec tru shape: ', dec_answer.shape)
         look_predict(bt_images, dec_truth)
