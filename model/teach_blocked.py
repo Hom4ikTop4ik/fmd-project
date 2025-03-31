@@ -85,6 +85,7 @@ def gen_lim(generator, percent):
             break
         yield obj
 
+
 def print_progress_bar(iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
     percent = (iteration / total) * 100
     bar_length = 10  # Length of the progress bar
@@ -225,8 +226,9 @@ def main():
                 else:
                     print(f'loss {loss:.5f}, iteration: {iteration}')
             print("\n")
+
         
-        print(f"End epichs time: {time.time() - pupupu:.2f}")
+        print(f"End epochs time: {time.time() - pupupu:.2f}")
 
         # Save after all iterations
         if (input("Do you wanna save weigths? (y/n) ")[0] in 'yYнН'):

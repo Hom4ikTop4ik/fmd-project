@@ -54,7 +54,7 @@ class MultyLayer(nn.Module):
         self.cblock7 = ConvBlock(device, 128, 256) # now 1x1
         self.bn7 = nn.BatchNorm2d(256).to(device)
 
-        self.head = Head(device, 256, 128, 20)
+        self.head = Head(device, 256, 128, 40)
 
     def forward(self, x):
         # Input: [batch, 3, H, W]
@@ -77,5 +77,5 @@ class MultyLayer(nn.Module):
         print1(x.shape)
         x = self.head(x)
         print1(x.shape)
-        x = x.view(-1, 20)
+        x = x.view(-1, 40)
         return x
