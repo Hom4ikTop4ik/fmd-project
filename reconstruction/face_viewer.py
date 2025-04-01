@@ -2,10 +2,11 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # Импорт для 3D проекций
 
+DOTS = 68
 
 cordpath = '../../experiments/condcords00003_3d.txt'
 cordfile = open(cordpath, 'r')
-ts = torch.zeros(68, 3)
+ts = torch.zeros(DOTS, 3)
 for i, line in enumerate(cordfile):
     ts[i] = torch.tensor(list(map(float, line.split())))
 ts[:, 1] = ts[:, 1] * ts[:, 2]

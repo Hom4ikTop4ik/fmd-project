@@ -8,6 +8,7 @@ import shutil
 wantPrintMessages = False
 wantPrintProgress = True
 wantPrintWarnings = True
+DOTS = 68
 
 # Поддерживаемые расширения
 imageExtensions = ['.bmp', '.jpeg', '.jpg', '.png', '.ppm', '.pgm', '.tif', '.tiff', '.webp']
@@ -134,7 +135,7 @@ for imageIndex  in range(cntOfImageNames):
 
     # Запись координат в файл
     with open(coordsPath, 'w') as txtfile:
-        for i in range(68):
+        for i in range(DOTS):
             x = landmarks.part(i).x
             y = landmarks.part(i).y
             txtfile.write(f"{x} {y}\n")
