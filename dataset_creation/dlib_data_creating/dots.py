@@ -1,6 +1,8 @@
 import dlib
 import cv2
 
+DOTS = 68
+
 # Загружаем модель обнаружения лиц (CNN)
 detector = dlib.cnn_face_detection_model_v1("mmod_human_face_detector.dat")
 # Загружаем модель определения ключевых точек
@@ -20,8 +22,8 @@ for det in dets:
     
     landmarks = predictor(image, face)
 
-    # 68 точек лица в формате (x, y)
-    for i in range(68):
+    # DOTS точек лица в формате (x, y)
+    for i in range(DOTS):
         x = landmarks.part(i).x
         y = landmarks.part(i).y
         # Рисуем точку на изображении

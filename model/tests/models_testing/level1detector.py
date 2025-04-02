@@ -61,7 +61,7 @@ def test():
         # Capture frame-by-frame
         ret, frame = cap.read()
         frame = torch.from_numpy(frame.astype(np.float32)).to(device) / 255
-        imgtens = frame.permute(2, 0, 1)[:, 100:356, 100:356].unsqueeze(0)
+        imgtens = frame.permute(2, 0, 1)[:, 0:432, 0:432].unsqueeze(0)
         print(imgtens.shape)
         predict = det1(imgtens)
         newimg = (imgtens[0, :, :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)

@@ -2,6 +2,8 @@ import os
 import random
 import torch
 
+DOTS = 68
+
 class Scaler():
     def __init__(self):
         self.min = 0 
@@ -30,9 +32,9 @@ class MinMaxNormalizer:
         if self.min is None:
             raise ValueError("Call fit() first")
             
-        if len(tensor.shape) == 2:  # Single tensor [68, 3]
+        if len(tensor.shape) == 2:  # Single tensor [DOTS, 3]
             tensor[:, 2] = (tensor[:, 2] - self.min) / (self.max - self.min)
-        else:  # Batch [batch_size, 68, 3]
+        else:  # Batch [batch_size, DOTS, 3]
             tensor[:, :, 2] = (tensor[:, :, 2] - self.min) / (self.max - self.min)
         return tensor
     
@@ -40,8 +42,8 @@ class MinMaxNormalizer:
         if self.min is None:
             raise ValueError("Call fit() first")
             
-        if len(tensor.shape) == 2:  # Single tensor [68, 3]
+        if len(tensor.shape) == 2:  # Single tensor [DOTS, 3]
             tensor[:, 2] = tensor[:, 2] * (self.max - self.min) + self.min
-        else:  # Batch [batch_size, 68, 3]
+        else:  # Batch [batch_size, DOTS, 3]
             tensor[:, :, 2] = tensor[:, :, 2] * (self.max - self.min) + self.min
         return tensor
