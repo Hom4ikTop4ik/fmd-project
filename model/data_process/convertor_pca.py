@@ -47,9 +47,9 @@ class MakerPCA():
         df_trans = self.pca.transform(df)
         return torch.Tensor(df_trans)
 
-    def decompress(self, coords_batch):
+    def decompress(self, PCA_batch):
         df = []
-        for coords in coords_batch:
+        for coords in PCA_batch:
             df.append(coords)
         df = pd.DataFrame(df)
         df_trans = self.pca.inverse_transform(df)

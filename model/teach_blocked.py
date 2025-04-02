@@ -10,13 +10,13 @@ import time
 from data_process.convertor_pca import MakerPCA
 from detector.blocked import MultyLayer
 
-from data_process import make_filter
+from data_process import make_filter, scale_img
 from data_process import load, noise, rotate, min_scale, max_scale, epochs, batch_size, imgs_count, total_iterations, iter_k
 from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA
 
 from tb.log_frog import get_writer
 
-DOTS = 68
+DOTS = 72
 
 def interactor(signal, frame):
     print('SIGINT was received.')
@@ -50,20 +50,38 @@ def model_test(look=False):
         loss = 0.0
         for bt_images, bt_coords in iter(dataloader):
             
+            bt_images = bt_images.to(device)
+            bt_coords = bt_coords.to(device)
+            
             truth = mypca.compress(bt_coords).to(device)
+            print(truth.shape)
             ans = model(bt_images)
+            print(ans.shape)
+
             loss += criterion(ans, truth)
+
             iteration += 1
             if look:
-                look_predict(bt_images, ans)
+                for i in range(40): # batch size
+                    print(ans[i].shape)
+                    ans_i = ans[i:i+1].to("cpu")
+                    print(ans_i)
+                    dec = mypca.decompress(ans_i)
+                    print(dec)
+                    PCA2coords = dec.reshape(-1, 3, DOTS).permute(0, 2, 1)
+                    look_predict(bt_images[i], PCA2coords)
+            print(f'total loss {loss / iteration}')
         
         print(f'total loss {loss / iteration}')
         print(f'total iterations count {iteration}')
 
 def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth = True):
     predict = predict[0]
-
-    newimg = (imgtens[0,[2,1,0], :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
+    # print(predict)
+    print(predict[0])
+    print(imgtens.shape)
+    img = scale_img(imgtens, 2, "bilinear")
+    newimg = (img[[0,1,2], :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
 
     newimg = np.ascontiguousarray(newimg)
     for coord in predict:
@@ -105,12 +123,12 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_dir, 'registry')
 weight_save_path = os.path.join(registry_path, 'weights', 'model_bns.pth')
 
-mypca = MakerPCA()
-mypca.load(os.path.join(current_dir,'data_process/pcaweights.pca'))
+# mypca = MakerPCA()
+# mypca.load(os.path.join(current_dir,'data_process/pcaweights.pca'))
 
 
 def main():
-    global dataloader, device, model, optimizer, criterion, coordfilter, current_dir, registry_path, weight_save_path
+    global dataloader, device, model, optimizer, criterion, coordfilter, current_dir, registry_path, weight_save_path, mypca
 
     device = 'cpu'
     if (USE_CPU_WHATEVER == False):
@@ -121,12 +139,13 @@ def main():
     dataloader, sampler = load(
         bsize=batch_size, 
         dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
-        device=device
+        device=device,
+        coords_dir = "extended_coords"
     )
     print("Finish load dataset with time: {}".format(time.time()))
 
     model = MultyLayer(device).to(device)
-    if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
+    if True or input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
         print(weight_save_path)
         model.load_state_dict(torch.load(weight_save_path))
         # model.load_state_dict(torch.load(weight_save_path, map_location = device))
@@ -139,14 +158,15 @@ def main():
     coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
 
     mypca = MakerPCA()
-    mypca.load(os.path.join(current_dir,'data_process/pcaweights.pca'))
+    mypca.load(os.path.join(current_dir,'data_process/pcaweights_ext.pca'))
 
+    # writer = new SummaryWriter(log_dir)
     writer = get_writer()
 
     # a1 = input("train or test? ")
-    a1 = "train" # or "test", or "look"
+    a1 = "train" # "train" or "test", or "look"
     if (a1 != "train"):
-        a1 = input("test or look? ")
+        # a1 = input("test or look? ")0
         if (a1 == "test"):
             print("Test loss mode")
             model_test(look = False)

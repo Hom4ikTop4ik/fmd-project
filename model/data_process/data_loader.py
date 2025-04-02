@@ -7,7 +7,7 @@ import re
 from torch.utils.data import Dataset, DataLoader
 from data_process.__init__ import noise, rotate, min_scale, max_scale
 from data_process.augments import augment_image
-from data_process.__init__ import USE_CPU_WHATEVER, DA
+from data_process.__init__ import USE_CPU_WHATEVER, DA, NET
 
 from torch.utils.data import Sampler
 import random
@@ -151,8 +151,13 @@ class CustomDataset(Dataset):
 
         # image = image.to(self.device)
         # coords = coords.to(self.device)
-        permuted_coords = depth_permute(coords)
-        return image, permuted_coords
+
+        # if (DA):
+            # permuted_coords = depth_permute(coords)
+            # print("\t\tcoords permuted")
+            # return image, permuted_coords
+
+        return image, coords
 
 def collate_fn(batch):
     images, coords = zip(*batch)
@@ -165,19 +170,23 @@ def load(
         dataset_path: str = '.', 
         images_dir: str = 'images', 
         coords_dir: str = 'coords',
-        device = 'cpu'
+        device = 'cpu',
+        sampler_seed = 0
     ):
+    print(device)
     images_dir_full = os.path.join(dataset_path, images_dir)
     coords_dir_full = os.path.join(dataset_path, coords_dir)
     
     augments = DA
     dataset = CustomDataset(images_dir_full, coords_dir_full, device, augments)
-    sampler = EpochShuffleSampler(len(dataset))
+    sampler = EpochShuffleSampler(len(dataset), sampler_seed)
     
     # 8 workers and prefetch=3 is about 3GB video memory
 
     num_workers = 8
-    prefetch_factor = 3 if (num_workers > 0) else None 
+    prefetch_factor = 0 if (num_workers > 0) else None 
+    if prefetch_factor == 0:
+        prefetch_factor = None
     pin = True # not torch.cuda.is_available() or USE_CPU_WHATEVER
 
     # Используем prefetch_factor для предзагрузки данных

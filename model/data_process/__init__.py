@@ -8,7 +8,7 @@ rotate = 45
 min_scale = 0.4
 max_scale = 1.3
 
-epochs = 10
+epochs = 50
 batch_size = 40
 imgs_count = 20000
 part = 0.9
