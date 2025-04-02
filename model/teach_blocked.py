@@ -140,7 +140,7 @@ def main():
         bsize=batch_size, 
         dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
         device=device,
-        coords_dir = "extended_coords"
+        coords_dir = "coords"
     )
     print("Finish load dataset with time: {}".format(time.time()))
 

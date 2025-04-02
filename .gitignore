@@ -1,5 +1,8 @@
 model/registry/*
 !model/registry/weights/model_bns.pth
+!model/registry/dataset/train/images/dataimg00101.jpeg
+!model/registry/dataset/train/coords/condcords00101_3d.txt
+
 model/flame_pytorch/model/*
 **/__pycache__
 model/logs/*
