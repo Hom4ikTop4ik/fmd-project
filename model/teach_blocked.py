@@ -140,7 +140,8 @@ def main():
         bsize=batch_size, 
         dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
         device=device,
-        coords_dir = "coords"
+        coords_dir = "coords",
+        sampler_seed=int(time.time())
     )
     print("Finish load dataset with time: {}".format(time.time()))
 
@@ -164,7 +165,7 @@ def main():
     writer = get_writer()
 
     # a1 = input("train or test? ")
-    a1 = "train" # "train" or "test", or "look"
+    a1 = "look" # "train" or "test", or "look"
     if (a1 != "train"):
         # a1 = input("test or look? ")0
         if (a1 == "test"):
@@ -189,7 +190,7 @@ def main():
 
             # next_seed = epoch + int(time.time())
             next_seed = epoch
-            sampler.set_seed(next_seed) # new shuffle
+            sampler.set_seed(next_seed + int(time.time())) # new shuffle
             dataloader_iterator = iter(dataloader)
 
             for iteration in range(1, total_iterations + 1):
