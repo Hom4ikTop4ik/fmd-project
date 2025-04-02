@@ -1,4 +1,5 @@
 model/registry/*
+!model/registry/weights/model_bns.pth
 model/flame_pytorch/model/*
 **/__pycache__
 model/logs/*
