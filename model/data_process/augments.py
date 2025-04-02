@@ -5,7 +5,7 @@ import torchvision.transforms.functional as F
 import random
 import time
 
-__all__ = ['make_filter']
+__all__ = ['make_filter', 'scale_img']
 
 frequency = 0.1
 show = False
@@ -15,7 +15,7 @@ show = False
 # (mean оставляет странный средний чёрный квадрат) 
 angleFiller = "INPAINT" # "INPAINT" or "MEAN"
 
-interpolate_mode = 'nearest' # 'nearest','bicubic' or 'bilinear'. no linear, its only for 1D, picture is 2D :(
+interpolate_mode = 'bilinear' # 'nearest','bicubic' or 'bilinear'. no linear, its only for 1D, picture is 2D :(
 # nearest - the fastest, the шакал'est
 
 def rotate_coords(coords, angle_degrees):

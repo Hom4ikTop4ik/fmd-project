@@ -2,16 +2,23 @@ import cv2
 import os
 import sys
 import signal
+import time
 import torch
 import torch.nn as nn
 import numpy as np
 
-from data_process import augment_gen
-from data_process import MakerPCA
+# from data_process import augment_gen
+# from data_process import MakerPCA
 from data_process import load
 
-def gen_lim(generator, limit):
+from data_process.convertor_pca import MakerPCA
+from detector.blocked import MultyLayer
+
+
+def gen_lim(limit, generator):
     for i, obj in enumerate(generator):
+        # if (i % 1 == 0) :
+        print(i)
         if i >= limit:
             break
         yield obj
@@ -19,14 +26,31 @@ def gen_lim(generator, limit):
 # establishing paths and loading
 current_path = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_path, 'registry')
-weight_save_path = os.path.join(registry_path, 'weights', 'model_bns.pth')
-dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'), imagesfile='dataset_coords_ext.pt')
+# dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'), imagesfile='dataset_coords_ext.pt')
 
 # establishing devices and signal handler
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(time.time())
 print("devise is: ", device)
+if __name__ == "__main__":
+    dataLoader, sampler = load(40, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
 
-mypca = MakerPCA().fit(gen_lim(augment_gen(dataset, epochs=10, device=device,
-                                        noise=0, part=0.9, displace=80, rotate=20, verbose=True), 200), 40, verbose=True)
+    dataIterator = iter(dataLoader)
+    print("AHAHHA")
 
-mypca.save(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
+
+    again = input("Train yet? (y/n)")
+    mypca = MakerPCA()
+    if (again != "n"):
+        print("load")
+        mypca.load(path=os.path.join(current_path, 'data_process/pcaweights_ext.pca'))
+        
+    for i in range(int(input("cycles"))):
+        new_data = gen_lim(1000, dataIterator)
+        sampler.set_seed(i)
+        print("\t\t")
+        mypca = mypca.fit(new_data, 40, verbose=True)
+    print("saving PCA...")
+    mypca.save(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
+    print("BB!")
+    
