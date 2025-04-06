@@ -11,10 +11,11 @@ max_scale = 1.3
 epochs = 50
 batch_size = 40
 imgs_count = 20000
-part = 0.9
-total_iterations = int(imgs_count * part) // batch_size
+total_iterations = imgs_count // batch_size
 
 iter_k = 20
+
+MODE = "train"
 
 DA = True
 NET = False
