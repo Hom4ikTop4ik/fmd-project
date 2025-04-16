@@ -21,7 +21,8 @@ glasses_list = []
 glasses_probability = 0.0
 glasses_directory = "I:/fmd-project/model/glasses"
 
-    # --- Локальные параметры ---
+# --- Локальные параметры ---
+colored_shape_use = False
 colored_shape_cover_ratio = 0.1
 min_colored_shape_slze = 10   # px
 max_colored_shape_slze = 300  # px
@@ -182,7 +183,7 @@ def add_glasses_opencv(image_tensor, landmarks, glasses_dir, probability=0.0):
 
 
 
-def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) -> torch.Tensor:
+def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07, use_shapes: bool = True) -> torch.Tensor:
     """
     Накладывает случайные повёрнутые цветные прямоугольники, чтобы перекрыть часть изображения.
 
@@ -190,6 +191,9 @@ def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) ->
     cover_ratio: доля перекрытия (например, 0.2 = 20% изображения)
     → возвращает модифицированный тензор [3, H, W], значения 0..1
     """
+    if not use_shapes:
+        return image_tensor
+    
     image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
     h, w = image.shape[:2]
     total_area = h * w
@@ -330,7 +334,7 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     # но сейчас это делает DataLoader
 
     img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
-    img = add_colored_shapes(img, colored_shape_cover_ratio)
+    img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
 
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate

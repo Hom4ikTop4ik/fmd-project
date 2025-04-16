@@ -62,7 +62,7 @@ def print1(x):
     pass
 
 class MultyLayer(nn.Module):
-    def __init__(self, device):
+    def __init__(self, device, layer_sizes=[128, 64, 40]):
         super(MultyLayer, self).__init__()
         self.pulconv = nn.Conv2d(3, 3, 7, stride=2, padding=3).to(device) 
         # out_size = floor((512 - kernel_size + 2*padding)/stride) + 1
@@ -93,7 +93,7 @@ class MultyLayer(nn.Module):
         # # is equals
         # self.head = Head(device, insize=256, layer_sizes=[128, 40], use_bn=False, dropout_prob=0.0) 
         
-        self.head = Head(device, insize=256, layer_sizes=[128, 64, 40], use_bn=False, dropout_prob=0.0) 
+        self.head = Head(device, insize=256, layer_sizes=layer_sizes, use_bn=False, dropout_prob=0.0) 
 
     def forward(self, x):
         # Input: [batch, 3, H, W]

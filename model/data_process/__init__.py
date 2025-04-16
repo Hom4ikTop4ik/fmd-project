@@ -4,7 +4,7 @@ from .augments import *
 from .utils import *
 
 noise = 0.05
-rotate = 45
+rotate = 30
 min_scale = 0.8
 max_scale = 1.2
 
@@ -20,4 +20,4 @@ MODE = "train"
 DA = True
 NET = False
 USE_CPU_WHATEVER = NET
-PROGRESS_BAR = DA
+PROGRESS_BAR = NET
