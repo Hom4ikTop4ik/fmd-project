@@ -143,6 +143,14 @@ def main():
     writer, log_frog_dir = log_frog.get_writer(logs_dir)
     print(f"Log directory: {log_frog_dir}")
 
+
+    model = MultyLayer(device).to(device)
+    if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
+        print(f"Loaded weights from {weight_save_path}")
+        model.load_state_dict(torch.load(weight_save_path))
+        # model.load_state_dict(torch.load(weight_save_path, map_location = device))
+
+
     print("Loading DataLoader...")
     start_loading_dataloader = time.time()
     dataloader, sampler = load(
@@ -152,15 +160,12 @@ def main():
         coords_dir="coords",
         sampler_seed=int(time.time())
     )
+
+    signal.signal(signal.SIGINT, interactor) # I WANT CLOSE PROGRAM
+    
+    # launch workers
+    next(iter(dataloader))
     print(f"Finish load DataLoader after {log_frog.format_number(time.time() - start_loading_dataloader)} secs")
-
-    model = MultyLayer(device).to(device)
-    if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
-        print(f"Loaded weights from {weight_save_path}")
-        model.load_state_dict(torch.load(weight_save_path))
-        # model.load_state_dict(torch.load(weight_save_path, map_location = device))
-
-    signal.signal(signal.SIGINT, interactor)
 
     optimizer = torch.optim.Adam(model.parameters(), 0.001, betas=(0.9, 0.95))
     criterion = nn.MSELoss().to(device)
@@ -279,6 +284,4 @@ def main():
 if __name__ == "__main__":
     main()
 else:
-    print()
-    print(f"I'm a worker, and this is a time: {time.time()}")
-    print()
+    print(f"\tI'm a worker, and this is a time: {time.time()}")
