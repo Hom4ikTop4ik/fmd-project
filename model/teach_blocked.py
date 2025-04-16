@@ -41,7 +41,12 @@ def interactor(signal, frame):
         cmd = input('Choose action: save/exit (continue by default): ')
         match cmd:
             case 'save':
-                path = weight_save_path
+                postfix = input(f"Enter a postfix (enter key - save to {weight_save_path}): ")
+                if (postfix == ""):
+                    path = weight_save_path
+                else:
+                    path = os.path.join(registry_path, 'weights', f'model_bns_{postfix}.pth')
+                
                 print(f'saving to {path}')
                 torch.save(model.state_dict(), path)
                 writer.close()
