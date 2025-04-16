@@ -4,19 +4,31 @@ import torch
 import torchvision.transforms.functional as F
 import random
 import time
+import os
+import sys
 
-__all__ = ['make_filter', 'scale_img']
-
-frequency = 0.1
-show = False
+__all__ = ['make_filter', 'scale_img', 'show_image', 'show_image2']
 
 # inpaint дорисовывает углы на основе картинки
 # mean заполняет средним цветом картинки (такое себе)
 # (mean оставляет странный средний чёрный квадрат) 
 angleFiller = "INPAINT" # "INPAINT" or "MEAN"
 
-interpolate_mode = 'bilinear' # 'nearest','bicubic' or 'bilinear'. no linear, its only for 1D, picture is 2D :(
-# nearest - the fastest, the шакал'est
+interpolate_mode = 'bilinear' # 'nearest','bicubic' or 'bilinear'. bi___ because picture is 2D :(
+# nearest - the fastest and the shakal'est
+
+glasses_list = []
+glasses_probability = 0.0
+glasses_directory = "I:/fmd-project/model/glasses"
+
+    # --- Локальные параметры ---
+colored_shape_cover_ratio = 0.1
+min_colored_shape_slze = 10   # px
+max_colored_shape_slze = 300  # px
+min_colored_shape_colors = (0, 0, 0)
+max_colored_shape_colors = (255, 255, 255)
+max_colored_shape_angle = 45  # degrees
+
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -56,7 +68,7 @@ def crop_coords_small(coords, left, right, top, bottom, prevsize):
         coords[i][1] = y
     return coords
 
-def show_image(img_to_print):
+def show_image(img_to_print: torch.Tensor):
     name = "img" + str(random.randint(0, 1000))
     cv2.imshow(name, img_to_print.cpu().numpy().transpose(1, 2, 0))
     cv2.waitKey(0)
@@ -77,7 +89,153 @@ def show_image2(img, coords):
     cv2.imshow(name, newimg)
     cv2.waitKey(0)
 
-def scale_img(img, scale, mode):
+
+
+def denormalize_points(landmarks: torch.Tensor, size: int = 512) -> np.ndarray:
+    landmarks_2d = landmarks[:, :2]  # Берём только x, y
+    return (landmarks_2d * size).int().numpy()
+
+def get_eye_centers(landmarks_px):
+    left_eye = landmarks_px[36:42]
+    right_eye = landmarks_px[42:48]
+    left_center = left_eye.mean(axis=0)
+    right_center = right_eye.mean(axis=0)
+    return left_center, right_center
+
+def load_random_glasses(glasses_dir):
+    global glasses_list
+
+    # оптимизируем: очков не так много — сохраним в список, чтоб постоянно не подгружать
+    if glasses_list == []:
+        files = [f for f in os.listdir(glasses_dir) if f.lower().endswith(".png")]
+        if not files:
+            raise FileNotFoundError("No glasses images *.png in directory!")
+        for file in files:
+            file_path = os.path.join(glasses_dir, file)
+            glasses_list.append(cv2.imread(file_path, cv2.IMREAD_UNCHANGED))
+
+    return random.choice(glasses_list)
+
+def transform_glasses_cv2(glasses, angle, scale):
+    h, w = glasses.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, scale)
+    transformed = cv2.warpAffine(glasses, M, (w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
+    return transformed
+
+# return image + glasses 
+def overlay_glasses(image, glasses, x, y):
+    h, w = glasses.shape[:2]
+    ih, iw = image.shape[:2]
+
+    # Координаты вставки на изображение
+    x1 = max(x - w // 2, 0)
+    y1 = max(y - h // 2, 0)
+    x2 = min(x1 + w, iw)
+    y2 = min(y1 + h, ih)
+
+    # Соответствующий участок очков
+    gx1 = max(0, - (x - w // 2))
+    gy1 = max(0, - (y - h // 2))
+    gx2 = gx1 + (x2 - x1)
+    gy2 = gy1 + (y2 - y1)
+
+    roi = image[y1:y2, x1:x2]
+    glasses_crop = glasses[gy1:gy2, gx1:gx2]
+
+    # Разделяем BGR и альфа-канал
+    alpha = glasses_crop[:, :, 3:4] / 255.0
+    bgr = glasses_crop[:, :, :3].astype(np.float32)
+
+    # Наложение по альфа-каналу
+    blended = (1 - alpha) * roi.astype(np.float32) + alpha * bgr
+    image[y1:y2, x1:x2] = blended.astype(np.uint8)
+    return image
+
+def add_glasses_opencv(image_tensor, landmarks, glasses_dir, probability=0.0):
+    if random.random() > probability:
+        return image_tensor # пропускаем
+
+    image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)  # [H, W, C] в uint8
+    landmarks_px = denormalize_points(landmarks)
+
+    left_center, right_center = get_eye_centers(landmarks_px)
+    eye_center = ((left_center + right_center) / 2).astype(int)
+    eye_dist = np.linalg.norm(right_center - left_center)
+
+    # Аугментации
+    scale_jitter = random.uniform(0.9, 1.1)
+    rotation_jitter = random.uniform(-1, 1)
+    shift_x = random.randint(-10, 10)
+    shift_y = random.randint(-10, 10)
+
+    glasses = load_random_glasses(glasses_dir)
+    scale = (eye_dist * 2.0 / glasses.shape[1]) * scale_jitter
+    glasses = transform_glasses_cv2(glasses, angle=rotation_jitter, scale=scale)
+
+    # Вставка
+    image = overlay_glasses(image, glasses, eye_center[0] + shift_x, eye_center[1] + shift_y)
+
+    # Обратно в тензор
+    image_tensor_out = torch.from_numpy(image.astype(np.float32) / 255.0).permute(2, 0, 1).clamp(0, 1)
+    return image_tensor_out
+
+
+
+def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) -> torch.Tensor:
+    """
+    Накладывает случайные повёрнутые цветные прямоугольники, чтобы перекрыть часть изображения.
+
+    image_tensor: [3, H, W], значения 0..1
+    cover_ratio: доля перекрытия (например, 0.2 = 20% изображения)
+    → возвращает модифицированный тензор [3, H, W], значения 0..1
+    """
+    image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+    h, w = image.shape[:2]
+    total_area = h * w
+    target_area = total_area * cover_ratio
+    covered_area = 0
+
+
+    while covered_area < target_area:
+        # Случайный размер прямоугольника
+        rect_w = random.randint(min_colored_shape_slze, max_colored_shape_slze)
+        rect_h = random.randint(min_colored_shape_slze, max_colored_shape_slze)
+        rect_area = rect_w * rect_h
+
+        # пробуем прямоугольник поменбше
+        if (covered_area + rect_area > target_area):
+            rect_w //= 2
+            rect_h //= 2
+        rect_area = rect_w * rect_h
+        if (covered_area + rect_area > target_area):
+            break
+
+        # Случайный цвет
+        color = tuple([
+            random.randint(min_colored_shape_colors[i], max_colored_shape_colors[i])
+            for i in range(3)
+        ])
+
+        # Случайная позиция
+        cx = random.randint(0, w)
+        cy = random.randint(0, h)
+        angle = random.uniform(-max_colored_shape_angle, max_colored_shape_angle)
+
+        # Создаём белую маску с одним прямоугольником
+        box = cv2.boxPoints(((cx, cy), (rect_w, rect_h), angle))
+        box = np.intp(box)
+        cv2.drawContours(image, [box], 0, color, thickness=cv2.FILLED)
+
+        covered_area += rect_area
+
+    image_tensor_out = torch.from_numpy(image.astype(np.float32) / 255.0).permute(2, 0, 1).clamp(0, 1)
+    return image_tensor_out
+
+
+
+
+def scale_img(img, scale, mode = 'bilinear'):
     if mode == 'bilinear':
         scale = torch.nn.functional.interpolate(
             img.unsqueeze(0), # создать псевдо ОСь с размером батча 
@@ -171,6 +329,9 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     # img = img[[2, 1, 0], :, :]  # Переключаем каналы обратно 
     # но сейчас это делает DataLoader
 
+    img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
+    img = add_colored_shapes(img, colored_shape_cover_ratio)
+
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
     angle = angle.item()
@@ -197,7 +358,6 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
             img = background
             prevsize = (x, y)
             coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
-
     elif (scale > 1.0):
         x, y = img.shape[1], img.shape[2]
 
@@ -205,7 +365,6 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
         big_y = int(y * scale)
         if (big_x > x):
             up_scale_img = scale_img(img, scale, mode = interpolate_mode)
-            # up_scale_img = F.interpolate(img.unsqueeze(0), size=(big_x, big_y), mode=interpolate_mode, align_corners=False).squeeze(0)
 
             # Обрезка до исходного размера
             cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()

@@ -28,19 +28,6 @@ class ConvBlock(nn.Module):
         x = self.act(self.conv3(x))
         return self.pool(x) + self.skipconv(x1)
 
-class Head_Old(nn.Module):
-    def __init__(self, device, insize, midsize, outsize):
-        super(Head, self).__init__()
-        self.insize = insize
-        self.fc1 = nn.Linear(insize, midsize)
-        self.fc2 = nn.Linear(midsize, outsize)
-        self.act = nn.LeakyReLU(0.01).to(device)
-    def forward(self, x):
-        x = x.view(-1, self.insize)
-        x = self.act(self.fc1(x))
-        x = self.fc2(x)
-        return x
-
 class Head(nn.Module):
     def __init__(self, device, insize, layer_sizes, use_bn=True, dropout_prob=0.0):
         super(Head, self).__init__()
