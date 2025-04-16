@@ -6,7 +6,7 @@ import re
 
 from torch.utils.data import Dataset, DataLoader
 from data_process.__init__ import noise, rotate, min_scale, max_scale
-from data_process.augments import augment_image
+from data_process.augments import augment_image, scale_img, show_image
 from data_process.__init__ import USE_CPU_WHATEVER, DA, NET
 
 from torch.utils.data import Sampler
