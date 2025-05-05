@@ -22,12 +22,14 @@ class Head(nn.Module):
         super(Head, self).__init__()
         self.insize = insize
         self.fc1 = nn.Linear(insize, midsize)
-        self.fc2 = nn.Linear(midsize, outsize)
+        self.fc2 = nn.Linear(midsize, midsize)
+        self.fc3 = nn.Linear(midsize, outsize)
         self.act = nn.LeakyReLU(0.01).to(device)
     def forward(self, x):
         x = x.view(-1, self.insize)
         x = self.act(self.fc1(x))
-        x = self.fc2(x)
+        x = self.act(self.fc2(x))
+        x = self.act(self.fc3(x))
         return x
 
 def print1(x):
@@ -41,20 +43,20 @@ class MultyLayer(nn.Module):
 
         self.cblock1 = ConvBlock(device, 3, 6) # now 128x128
         self.bn1 = nn.BatchNorm2d(6).to(device)
-        self.cblock2 = ConvBlock(device, 6, 9) # now 64x64
-        self.bn2 = nn.BatchNorm2d(9).to(device)
-        self.cblock3 = ConvBlock(device, 9, 16) # now 32x32
-        self.bn3 = nn.BatchNorm2d(16).to(device)
-        self.cblock4 = ConvBlock(device, 16, 32) # now 16x16
-        self.bn4 = nn.BatchNorm2d(32).to(device)
-        self.cblock5 = ConvBlock(device, 32, 64) # now 8x8
-        self.bn5 = nn.BatchNorm2d(64).to(device)
-        self.cblock6 = ConvBlock(device, 64, 128) # now 4x4
-        self.bn6 = nn.BatchNorm2d(128).to(device)
-        self.cblock7 = ConvBlock(device, 128, 256) # now 1x1
-        self.bn7 = nn.BatchNorm2d(256).to(device)
+        self.cblock2 = ConvBlock(device, 6, 12) # now 64x64
+        self.bn2 = nn.BatchNorm2d(12).to(device)
+        self.cblock3 = ConvBlock(device, 12, 24) # now 32x32
+        self.bn3 = nn.BatchNorm2d(24).to(device)
+        self.cblock4 = ConvBlock(device, 24, 64) # now 16x16
+        self.bn4 = nn.BatchNorm2d(64).to(device)
+        self.cblock5 = ConvBlock(device, 64, 128) # now 8x8
+        self.bn5 = nn.BatchNorm2d(128).to(device)
+        self.cblock6 = ConvBlock(device, 128, 256) # now 4x4
+        self.bn6 = nn.BatchNorm2d(256).to(device)
+        self.cblock7 = ConvBlock(device, 256, 512) # now 1x1
+        self.bn7 = nn.BatchNorm2d(512).to(device)
 
-        self.head = Head(device, 256, 128, 40)
+        self.head = Head(device, 512, 256, 60)
 
     def forward(self, x):
         # Input: [batch, 3, H, W]
@@ -77,5 +79,6 @@ class MultyLayer(nn.Module):
         print1(x.shape)
         x = self.head(x)
         print1(x.shape)
-        x = x.view(-1, 40)
+        x = x.view(-1, 60)
+        print1(x.shape)
         return x
