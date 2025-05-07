@@ -112,13 +112,13 @@ def show_image(img_to_print: torch.Tensor):
     #   чтобы продолжить работу НЕ закрывая окно 
     # (возможны временные зависания)
     return name
+
 def show_image_numpy(img_to_print):
+    """Как и show_image, но принимает ПОЛНОСТЬЮ готовый ndarray
+       [torch.Tensor].cpu().numpy().transpose(1, 2, 0)"""
     name = "img_aboba" + str(random.randint(0, 1000))
     cv2.imshow(name, img_to_print)
     cv2.waitKey(0)
-    # Для продолжения жмякнуть клавишу в любом активном окне с фото, 
-    #   чтобы продолжить работу НЕ закрывая окно 
-    # (возможны временные зависания)
     return name
 
 def show_image_coords(img, coords):
@@ -241,7 +241,6 @@ def simulate_linear_ISO(tensor: torch.Tensor, a: float = 1.0, b: float = 0.0) ->
 
 def simulate_gamma_ISO(tensor: torch.Tensor, gamma: float = 1.0, offset: float = 0.0):
     """y = x^gamma + offset"""
-    # img ∈ [0, 1], offset ∈ [-1, 1]
     img = tensor.clone().clamp(min=1e-5)
     result = torch.pow(img, gamma) + offset
     return result.clamp(0, 1)
@@ -492,25 +491,9 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
         print("Image is not square!")
         return None, None
 
-    # img = img[[2, 1, 0], :, :]  # Переключаем каналы обратно 
-    # но сейчас это делает DataLoader
-
     # img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
-    img_orig = img.clone()
     img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
-
     img = add_gaussian_blur(img, blur_level)
-
-
-    # imgLN = simulate_ISO(img, mode="linear")
-    # imgLY = simulate_ISO(img, mode="linear", noise_strength = 0.05)
-    # imgGN = simulate_ISO(img, mode="gamma")
-    # imgGY = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
-
-    # big = concat_images_ver(concat_images_hor(concat_images_hor(img_before_blur, img), imgLN), concat_images_hor(concat_images_hor(imgLY, imgGN), imgGY))
-    # save_tensor_image_cv2(big)
-    # sys.exit()
-
     img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
 
     # Генерация случайного угла вращения
@@ -529,7 +512,6 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
 
         if (x > small_x):
             down_scale_img = scale_img(img, scale, mode = interpolate_mode)
-            # down_scale_img = F.resize(img, (int(x * scale), int(y * scale)), fill=(0, 0, 0))
             
             cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
             cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
@@ -571,12 +553,6 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
     # Добавление шума
     if noise > 0:
         img = noise_tensor(img, noise)
-
-    # only if Ilya wants, but it still works without 432px
-    # img = scale_img(img, 432/512, interpolate_mode)
-
-    # save_tensor_image_cv2(concat_images_hor(img_orig, img))
-    # sys.exit()
 
     return img, coords
 
