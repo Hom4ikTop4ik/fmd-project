@@ -6,6 +6,7 @@ import random
 import time
 import os
 import sys
+from datetime import datetime
 
 __all__ = ['make_filter', 'scale_img', 'show_image', 'show_image2']
 
@@ -21,7 +22,8 @@ glasses_list = []
 glasses_probability = 0.0
 glasses_directory = "I:/fmd-project/model/glasses"
 
-    # --- Локальные параметры ---
+# --- Локальные параметры ---
+colored_shape_use = True
 colored_shape_cover_ratio = 0.1
 min_colored_shape_slze = 10   # px
 max_colored_shape_slze = 300  # px
@@ -29,6 +31,36 @@ min_colored_shape_colors = (0, 0, 0)
 max_colored_shape_colors = (255, 255, 255)
 max_colored_shape_angle = 45  # degrees
 
+
+# y = A*x + B
+LINEAR_ISO_A_FROM = 0.4
+LINEAR_ISO_A_TO = 1.6
+LINEAR_ISO_B_FROM = -0.05
+LINEAR_ISO_B_TO = 0.05
+
+# gamma and offset
+LINEAR_ISO_G_FROM = 1
+LINEAR_ISO_G_TO = 5
+LINEAR_ISO_O_FROM = -0.05
+LINEAR_ISO_O_TO = 0.05
+
+
+
+def torch_rand_uniform(low, high) -> torch.Tensor:
+    """low >= high -> return 0.torch.Tensor()"""
+    if (low >= high) :
+        return torch.tensor([0])
+    return torch.empty(1).uniform_(low, high)
+
+def torch_rand_normal(mean, omega, low=None, high=None) -> torch.Tensor:
+    # Генерируем случайное число из стандартного нормального распределения
+    x = torch.randn(1) * omega + mean
+    
+    # Если задан диапазон, ограничиваем значения
+    if low is not None and high is not None:
+        x.clamp(min=low, max=high)
+    
+    return x
 
 def rotate_coords(coords, angle_degrees):
     angle_radians = -torch.deg2rad(torch.tensor(angle_degrees, dtype=torch.float32))
@@ -89,8 +121,6 @@ def show_image2(img, coords):
     cv2.imshow(name, newimg)
     cv2.waitKey(0)
 
-
-
 def denormalize_points(landmarks: torch.Tensor, size: int = 512) -> np.ndarray:
     landmarks_2d = landmarks[:, :2]  # Берём только x, y
     return (landmarks_2d * size).int().numpy()
@@ -101,6 +131,39 @@ def get_eye_centers(landmarks_px):
     left_center = left_eye.mean(axis=0)
     right_center = right_eye.mean(axis=0)
     return left_center, right_center
+
+def simulate_linear_ISO(tensor: torch.Tensor, a: float = 1.0, b: float = 0.0) -> torch.Tensor:
+    """y = a*x + b"""
+    img = tensor.clone()
+    img = a*img + b
+
+    return img.clamp(0, 1)
+
+def simulate_gamma_ISO(tensor: torch.Tensor, gamma: float = 1.0, offset: float = 0.0):
+    """y = x^gamma + offset"""
+    img = tensor.clone().clamp(min=1e-5)
+    result = torch.pow(img, gamma) + offset
+    return result.clamp(0, 1)
+
+def simulate_ISO(tensor: torch.Tensor, mode : str = "linear", noise_strength : float = 0.0):
+    if mode == "linear":
+        a = torch_rand_uniform(LINEAR_ISO_A_FROM, LINEAR_ISO_A_TO)
+        b = torch_rand_uniform(LINEAR_ISO_B_FROM, LINEAR_ISO_B_TO)
+        img = simulate_linear_ISO(tensor, a, b)
+    elif mode == "gamma":
+        pre_gamma = torch_rand_uniform(LINEAR_ISO_G_FROM, LINEAR_ISO_G_TO)
+        gamma = random.choice([pre_gamma, 1 / pre_gamma])
+        offset = torch_rand_uniform(LINEAR_ISO_O_FROM, LINEAR_ISO_O_TO)
+        img = simulate_gamma_ISO(tensor, gamma, offset)
+    else:
+        return tensor
+
+    if noise_strength > 0:
+        noise = torch.randn_like(img) * noise_strength
+        img = img + noise
+
+    return img
+
 
 def load_random_glasses(glasses_dir):
     global glasses_list
@@ -182,7 +245,7 @@ def add_glasses_opencv(image_tensor, landmarks, glasses_dir, probability=0.0):
 
 
 
-def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) -> torch.Tensor:
+def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07, use_shapes: bool = True) -> torch.Tensor:
     """
     Накладывает случайные повёрнутые цветные прямоугольники, чтобы перекрыть часть изображения.
 
@@ -190,6 +253,9 @@ def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) ->
     cover_ratio: доля перекрытия (например, 0.2 = 20% изображения)
     → возвращает модифицированный тензор [3, H, W], значения 0..1
     """
+    if not use_shapes:
+        return image_tensor
+    
     image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
     h, w = image.shape[:2]
     total_area = h * w
@@ -326,11 +392,9 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
         print("Image is not square!")
         return None, None
 
-    # img = img[[2, 1, 0], :, :]  # Переключаем каналы обратно 
-    # но сейчас это делает DataLoader
-
     img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
-    img = add_colored_shapes(img, colored_shape_cover_ratio)
+    img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
+    img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
 
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
@@ -348,7 +412,6 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
 
         if (x > small_x):
             down_scale_img = scale_img(img, scale, mode = interpolate_mode)
-            # down_scale_img = F.resize(img, (int(x * scale), int(y * scale)), fill=(0, 0, 0))
             
             cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
             cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
@@ -390,9 +453,6 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     # Добавление шума
     if noise > 0:
         img = noise_tensor(img, noise)
-
-    # only if Ilya wants, but it still works without 432px
-    # img = scale_img(img, 432/512, interpolate_mode)
 
     return img, coords
 
