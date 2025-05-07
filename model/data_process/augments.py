@@ -6,8 +6,9 @@ import random
 import time
 import os
 import sys
+from datetime import datetime
 
-__all__ = ['make_filter', 'scale_img', 'show_image', 'show_image2']
+__all__ = ['make_filter', 'scale_img', 'show_image', 'show_image_coords']
 
 # inpaint дорисовывает углы на основе картинки
 # mean заполняет средним цветом картинки (такое себе)
@@ -21,13 +22,46 @@ glasses_list = []
 glasses_probability = 0.0
 glasses_directory = "I:/fmd-project/model/glasses"
 
-    # --- Локальные параметры ---
+# --- Локальные параметры ---
+colored_shape_use = True
 colored_shape_cover_ratio = 0.1
 min_colored_shape_slze = 10   # px
 max_colored_shape_slze = 300  # px
 min_colored_shape_colors = (0, 0, 0)
 max_colored_shape_colors = (255, 255, 255)
 max_colored_shape_angle = 45  # degrees
+
+
+# y = A*x + B
+LINEAR_ISO_A_FROM = 0.4
+LINEAR_ISO_A_TO = 1.6
+LINEAR_ISO_B_FROM = -0.05
+LINEAR_ISO_B_TO = 0.05
+
+# gamma and offset
+LINEAR_ISO_G_FROM = 1
+LINEAR_ISO_G_TO = 5
+LINEAR_ISO_O_FROM = -0.05
+LINEAR_ISO_O_TO = 0.05
+
+
+
+def torch_rand_uniform(low, high) -> torch.Tensor:
+    """low >= high -> return 0.torch.Tensor()"""
+    if (low >= high) :
+        return torch.tensor([0])
+    return torch.empty(1).uniform_(low, high)
+
+def torch_rand_normal(mean, omega, low=None, high=None) -> torch.Tensor:
+    # Генерируем случайное число из стандартного нормального распределения
+    x = torch.randn(1) * omega + mean
+    
+    # Если задан диапазон, ограничиваем значения
+    if low is not None and high is not None:
+        x.clamp(min=low, max=high)
+    
+    return x
+
 
 
 def rotate_coords(coords, angle_degrees):
@@ -68,6 +102,8 @@ def crop_coords_small(coords, left, right, top, bottom, prevsize):
         coords[i][1] = y
     return coords
 
+
+
 def show_image(img_to_print: torch.Tensor):
     name = "img" + str(random.randint(0, 1000))
     cv2.imshow(name, img_to_print.cpu().numpy().transpose(1, 2, 0))
@@ -76,8 +112,16 @@ def show_image(img_to_print: torch.Tensor):
     #   чтобы продолжить работу НЕ закрывая окно 
     # (возможны временные зависания)
     return name
+def show_image_numpy(img_to_print):
+    name = "img_aboba" + str(random.randint(0, 1000))
+    cv2.imshow(name, img_to_print)
+    cv2.waitKey(0)
+    # Для продолжения жмякнуть клавишу в любом активном окне с фото, 
+    #   чтобы продолжить работу НЕ закрывая окно 
+    # (возможны временные зависания)
+    return name
 
-def show_image2(img, coords):
+def show_image_coords(img, coords):
     name = "img" + str(random.randint(0, 1000))
     newimg = (img.cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
 
@@ -91,6 +135,74 @@ def show_image2(img, coords):
 
 
 
+def concat_images_hor(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+    """
+    Склеивает два изображения горизонтально (фото1|фото2).
+    
+    Аргументы:
+    - img1, img2: тензоры изображений с одинаковыми размерами (C, H, W)
+    
+    Возвращает:
+    - тензор изображения (C, H, W1 + W2) [dim = 2]
+    """
+    assert img1.shape[:2] == img2.shape[:2], "Изображения должны быть одного размера"
+    assert img1.dim() == 3, "Ожидается изображение в формате (C, H, W)"
+    
+    return torch.cat((img1, img2), dim=2)
+
+def concat_images_ver(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+    """
+    Склеивает два изображения вертикально (фото1\nфото2).
+    
+    Аргументы:
+    - img1, img2: тензоры изображений с одинаковыми размерами (C, H, W)
+    
+    Возвращает:
+    - тензор изображения (C, H1 + H2, W)
+    """
+    assert img1.shape[0] == img2.shape[0] and img1.shape[2] == img2.shape[2], "Изображения должны быть одного размера"
+    assert img1.dim() == 3, "Ожидается изображение в формате (C, H, W)"
+    
+    return torch.cat((img1, img2), dim=1)
+
+def save_tensor_image_cv2(tensor: torch.Tensor, folder: str = ".", 
+                          rand_range: tuple = (1000, 9999), ext: str = "png") -> str:
+    """
+    Сохраняет изображение из тензора в файл с помощью OpenCV (cv2).
+    
+    Аргументы:
+    - tensor: torch.Tensor формата (C, H, W), значения в [0, 1] или [0, 255]
+    - folder: путь к папке для сохранения
+    - rand_range: диапазон для случайной части имени
+    - ext: расширение файла (по умолчанию png)
+
+    Возвращает:
+    - Полный путь к сохранённому файлу
+    """
+    assert tensor.dim() == 3 and tensor.shape[0] in [1, 3], "Ожидается формат (C, H, W)"
+
+    # Переводим в numpy и (H, W, C)
+    img = tensor.detach().clamp(0, 1).cpu().numpy().transpose(1, 2, 0)
+
+    # Масштабируем и приводим к uint8
+    if img.max() <= 1.0:
+        img = img * 255
+    img = np.clip(img, 0, 255).astype(np.uint8)
+
+    # Генерируем имя
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    rand_part = random.randint(*rand_range)
+    filename = f"{timestamp}_{rand_part}.{ext}"
+    filepath = os.path.join(folder, filename)
+
+    # Сохраняем
+    cv2.imwrite(filepath, img)
+
+    return filepath
+
+
+
+
 def denormalize_points(landmarks: torch.Tensor, size: int = 512) -> np.ndarray:
     landmarks_2d = landmarks[:, :2]  # Берём только x, y
     return (landmarks_2d * size).int().numpy()
@@ -101,6 +213,58 @@ def get_eye_centers(landmarks_px):
     left_center = left_eye.mean(axis=0)
     right_center = right_eye.mean(axis=0)
     return left_center, right_center
+
+
+
+def add_gaussian_blur(image_tensor: torch.Tensor, blur_level: int = 5) -> torch.Tensor:
+    """
+    Добавляет размытие по Гауссу к изображению, имитируя плохую веб-камеру.
+    
+    image_tensor: [3, H, W], значения от 0 до 1
+    blur_level: нечётное число > 1 — размер ядра размытия (чем больше, тем сильнее размытие)
+    → возвращает размытое изображение [3, H, W], значения 0..1
+    """
+    if blur_level < 3 or blur_level % 2 == 0:
+        raise ValueError("blur_level должен быть нечётным числом >= 3")
+    
+    image_np = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+    blurred_np = cv2.GaussianBlur(image_np, (blur_level, blur_level), sigmaX=0)
+    blurred_tensor = torch.from_numpy(blurred_np.astype(np.float32) / 255.0).permute(2, 0, 1).clamp(0, 1)
+    return blurred_tensor
+
+def simulate_linear_ISO(tensor: torch.Tensor, a: float = 1.0, b: float = 0.0) -> torch.Tensor:
+    """y = a*x + b"""
+    img = tensor.clone()
+    img = a*img + b
+
+    return img.clamp(0, 1)
+
+def simulate_gamma_ISO(tensor: torch.Tensor, gamma: float = 1.0, offset: float = 0.0):
+    """y = x^gamma + offset"""
+    # img ∈ [0, 1], offset ∈ [-1, 1]
+    img = tensor.clone().clamp(min=1e-5)
+    result = torch.pow(img, gamma) + offset
+    return result.clamp(0, 1)
+
+def simulate_ISO(tensor: torch.Tensor, mode : str = "linear", noise_strength : float = 0.0):
+    if mode == "linear":
+        a = torch_rand_uniform(LINEAR_ISO_A_FROM, LINEAR_ISO_A_TO)
+        b = torch_rand_uniform(LINEAR_ISO_B_FROM, LINEAR_ISO_B_TO)
+        img = simulate_linear_ISO(tensor, a, b)
+    elif mode == "gamma":
+        pre_gamma = torch_rand_uniform(LINEAR_ISO_G_FROM, LINEAR_ISO_G_TO)
+        gamma = random.choice([pre_gamma, 1 / pre_gamma])
+        offset = torch_rand_uniform(LINEAR_ISO_O_FROM, LINEAR_ISO_O_TO)
+        img = simulate_gamma_ISO(tensor, gamma, offset)
+    else:
+        return tensor
+
+    if noise_strength > 0:
+        noise = torch.randn_like(img) * noise_strength
+        img = img + noise
+
+    return img
+
 
 def load_random_glasses(glasses_dir):
     global glasses_list
@@ -182,7 +346,7 @@ def add_glasses_opencv(image_tensor, landmarks, glasses_dir, probability=0.0):
 
 
 
-def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) -> torch.Tensor:
+def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07, use_shapes: bool = True) -> torch.Tensor:
     """
     Накладывает случайные повёрнутые цветные прямоугольники, чтобы перекрыть часть изображения.
 
@@ -190,6 +354,9 @@ def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07) ->
     cover_ratio: доля перекрытия (например, 0.2 = 20% изображения)
     → возвращает модифицированный тензор [3, H, W], значения 0..1
     """
+    if not use_shapes:
+        return image_tensor
+    
     image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
     h, w = image.shape[:2]
     total_area = h * w
@@ -259,13 +426,12 @@ def scale_img(img, scale, mode = 'bilinear'):
     
     return scale
 
-def noise_tensor(img, noise_factor, verbose = False):
-    if verbose:
-        print("augments.py/noise_tensor/device:" + str(img.device))
-
-    # Во сколько раз уменьшать картинку, список значений.
-    # Дальше берётся среднее арифметическое.
-    noise_sizes = [1, 2, 4, 8] # if empty, no add noise
+def noise_tensor(img, noise_factor, noise_sizes = [1, 2, 4, 8]):
+    """
+    if noise_tensor empty, no add noise
+    Во сколько раз уменьшать картинку, список значений.
+    Дальше берётся среднее арифметическое.
+    """
     
     img_copy = img
     
@@ -321,7 +487,7 @@ def in_paint(img):
         img = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device) / 255.0  # H x W x C -> C x H x W и нормализация
     return img
 
-def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
+def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, blur_level=5):
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None
@@ -329,8 +495,23 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
     # img = img[[2, 1, 0], :, :]  # Переключаем каналы обратно 
     # но сейчас это делает DataLoader
 
-    img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
-    img = add_colored_shapes(img, colored_shape_cover_ratio)
+    # img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
+    img_orig = img.clone()
+    img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
+
+    img = add_gaussian_blur(img, blur_level)
+
+
+    # imgLN = simulate_ISO(img, mode="linear")
+    # imgLY = simulate_ISO(img, mode="linear", noise_strength = 0.05)
+    # imgGN = simulate_ISO(img, mode="gamma")
+    # imgGY = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
+
+    # big = concat_images_ver(concat_images_hor(concat_images_hor(img_before_blur, img), imgLN), concat_images_hor(concat_images_hor(imgLY, imgGN), imgGY))
+    # save_tensor_image_cv2(big)
+    # sys.exit()
+
+    img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
 
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
@@ -393,6 +574,9 @@ def augment_image(img, coords, rotate=0, noise=0.0, scale=1.0):
 
     # only if Ilya wants, but it still works without 432px
     # img = scale_img(img, 432/512, interpolate_mode)
+
+    # save_tensor_image_cv2(concat_images_hor(img_orig, img))
+    # sys.exit()
 
     return img, coords
 

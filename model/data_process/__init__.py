@@ -4,9 +4,10 @@ from .augments import *
 from .utils import *
 
 noise = 0.05
-rotate = 45
+rotate = 30
 min_scale = 0.8
 max_scale = 1.2
+blur_level = 7
 
 epochs = 50
 batch_size = 40
