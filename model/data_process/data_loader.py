@@ -5,7 +5,7 @@ import numpy as np
 import re
 
 from torch.utils.data import Dataset, DataLoader
-from data_process.__init__ import noise, rotate, min_scale, max_scale
+from data_process.__init__ import noise, rotate, min_scale, max_scale, blur_level
 from data_process.augments import augment_image, scale_img, show_image
 from data_process.__init__ import USE_CPU_WHATEVER, DA, NET
 
@@ -65,7 +65,7 @@ class CustomDataset(Dataset):
 
         if self.aug:
             scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
-            image, coords = augment_image(image, coords, rotate, noise, scale)
+            image, coords = augment_image(image, coords, rotate, noise, scale, blur_level)
 
         # image = image.to(self.device)
         # coords = coords.to(self.device)
