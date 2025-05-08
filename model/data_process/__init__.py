@@ -2,14 +2,15 @@ from .data_loader import *
 from .normalizer import *
 from .augments import *
 from .utils import *
+from .convertor_pca import MakerPCA
 
-noise = 0.05
-rotate = 45
-min_scale = 0.4
-max_scale = 1.3
+noise = 0.15
+rotate = 30
+min_scale = 1
+max_scale = 1
 
-epochs = 50
-batch_size = 40
+epochs = 4
+batch_size = 60
 imgs_count = 20000
 part = 0.9
 total_iterations = int(imgs_count * part) // batch_size

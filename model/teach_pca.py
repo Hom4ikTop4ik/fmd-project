@@ -1,7 +1,4 @@
-import cv2
 import os
-import sys
-import signal
 import time
 import torch
 import torch.nn as nn
@@ -33,11 +30,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(time.time())
 print("devise is: ", device)
 if __name__ == "__main__":
-    dataLoader, sampler = load(40, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
+    dataLoader, sampler = load(64, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
 
     dataIterator = iter(dataLoader)
     print("AHAHHA")
-
 
     again = input("Train yet? (y/n)")
     mypca = MakerPCA()
@@ -49,7 +45,7 @@ if __name__ == "__main__":
         new_data = gen_lim(1000, dataIterator)
         sampler.set_seed(i)
         print("\t\t")
-        mypca = mypca.fit(new_data, 40, verbose=True)
+        mypca = mypca.fit(new_data, 60, verbose=True)
     print("saving PCA...")
     mypca.save(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
     print("BB!")

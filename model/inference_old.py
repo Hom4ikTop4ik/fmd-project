@@ -77,7 +77,7 @@ def test(videopath, outpath):
 
     # videopath = os.path.join(current_path, '../reconstruction/big_yula_est_chokoladku.mp4')
     cap = None
-    if videopath == 'camera':
+    if videopath == '^_^':
         cap = cv2.VideoCapture(0)
     else:
         cap = cv2.VideoCapture(videopath)
@@ -123,7 +123,7 @@ def test(videopath, outpath):
         frameid += 1
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-            
+
     # Release resources
     cap.release()
     out.release()

@@ -145,7 +145,7 @@ def main():
     print("Finish load dataset with time: {}".format(time.time()))
 
     model = MultyLayer(device).to(device)
-    if True or input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
+    if False or input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
         print(weight_save_path)
         model.load_state_dict(torch.load(weight_save_path))
         # model.load_state_dict(torch.load(weight_save_path, map_location = device))
@@ -214,12 +214,19 @@ def main():
 
                 
                 if iteration % 2500 == 0:
-                    dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
-                    dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
-                    print('dec ans shape: ', dec_answer.shape)
-                    print('dec tru shape: ', dec_answer.shape)
-                    look_predict(bt_images, dec_truth)
-                    look_predict(bt_images, dec_answer)
+                    img = bt_images[0].permute(1, 2, 0).cpu().numpy()
+                    img = np.clip(img, 0, 1)
+                    cv2.imshow('img', img)
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+                    
+
+                    # dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
+                    # dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
+                    # print('dec ans shape: ', dec_answer.shape)
+                    # print('dec tru shape: ', dec_answer.shape)
+                    # look_predict(bt_images, dec_truth)
+                    # look_predict(bt_images, dec_answer)
                 
                 if PROGRESS_BAR:
                     # Record the time taken for this iteration

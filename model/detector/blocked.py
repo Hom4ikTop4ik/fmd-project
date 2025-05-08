@@ -36,10 +36,11 @@ def print1(x):
     # print(x)
     pass
 
+
 class MultyLayer(nn.Module):
     def __init__(self, device):
         super(MultyLayer, self).__init__()
-        self.pulconv = nn.Conv2d(3, 3, 7, stride=2).to(device)
+        self.pulconv = nn.Conv2d(3, 3, 7, stride=2, padding=3).to(device)
 
         self.cblock1 = ConvBlock(device, 3, 6) # now 128x128
         self.bn1 = nn.BatchNorm2d(6).to(device)
@@ -53,8 +54,10 @@ class MultyLayer(nn.Module):
         self.bn5 = nn.BatchNorm2d(128).to(device)
         self.cblock6 = ConvBlock(device, 128, 256) # now 4x4
         self.bn6 = nn.BatchNorm2d(256).to(device)
-        self.cblock7 = ConvBlock(device, 256, 512) # now 1x1
+        self.cblock7 = ConvBlock(device, 256, 512) # now 2x2
         self.bn7 = nn.BatchNorm2d(512).to(device)
+        self.cblock8 = ConvBlock(device, 512, 512) # now 1x1
+        self.bn8 = nn.BatchNorm2d(512).to(device)
 
         self.head = Head(device, 512, 256, 60)
 
@@ -76,6 +79,8 @@ class MultyLayer(nn.Module):
         x = self.bn6(self.cblock6(x))
         print1(x.shape)
         x = self.bn7(self.cblock7(x))
+        print1(x.shape)
+        x = self.bn8(self.cblock8(x))
         print1(x.shape)
         x = self.head(x)
         print1(x.shape)
