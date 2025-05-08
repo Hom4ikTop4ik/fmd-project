@@ -32,6 +32,14 @@ max_colored_shape_colors = (255, 255, 255)
 max_colored_shape_angle = 45  # degrees
 
 
+SHIFT_LEFT_COEF = -0.2
+SHIFT_RIGHT_COEF = -0.19
+SHIFT_UP_COEF = -0.1
+SHIFT_DOWN_COEF = 0.2
+
+
+
+
 # y = A*x + B
 LINEAR_ISO_A_FROM = 0.4
 LINEAR_ISO_A_TO = 1.6
@@ -216,6 +224,45 @@ def get_eye_centers(landmarks_px):
 
 
 
+def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    C, H, W = image_tensor.shape
+
+    shift_x = torch.empty(1).uniform_(SHIFT_LEFT_COEF, SHIFT_RIGHT_COEF).item()
+    shift_y = torch.empty(1).uniform_(SHIFT_UP_COEF, SHIFT_DOWN_COEF).item()
+
+    shift_px_x = int(shift_x * W)
+    shift_px_y = int(shift_y * H)
+
+    print(shift_x, shift_px_x)
+    print(shift_y, shift_px_y)
+    
+    # Вычисляем координаты для исходного и нового положения
+    src_x_start = max(0, -shift_px_x) # если сдвинется влево, первый px_x пикселей нам не нужны из оригинала
+    src_x_end = min(W, W - shift_px_x) # если сдвинется вправо, последние px_x пикселей не понадобятся
+    dst_x_start = max(0, shift_px_x) # куда вставлять ОТ
+    dst_x_end = min(W, W + shift_px_x) # куда вставлять ДО
+
+    print(src_x_start, dst_x_start)
+    print(src_x_end, dst_x_end)
+
+    src_y_start = max(0, -shift_px_y)
+    src_y_end = min(H, H - shift_px_y)
+    dst_y_start = max(0, shift_px_y)
+    dst_y_end = min(H, H + shift_px_y)
+    
+    # Создаём пустой холст
+    image_shifted = torch.zeros_like(image_tensor)
+    # Копируем содержимое
+    image_shifted[:, dst_y_start:dst_y_end, dst_x_start:dst_x_end] = image_tensor[:, src_y_start:src_y_end, src_x_start:src_x_end]
+
+    coords_shifted = coords_tensor.clone()
+    for i in range(coords_tensor.shape[0]):
+        coords_shifted[i][0] += shift_x
+        coords_shifted[i][1] += shift_y
+
+    return image_shifted, coords_shifted
+
+
 def add_gaussian_blur(image_tensor: torch.Tensor, blur_level: int = 5) -> torch.Tensor:
     """
     Добавляет размытие по Гауссу к изображению, имитируя плохую веб-камеру.
@@ -280,7 +327,7 @@ def load_random_glasses(glasses_dir):
     return random.choice(glasses_list)
 
 def transform_glasses_cv2(glasses, angle, scale):
-    h, w = glasses.shape[:2]
+    h, w = glasses.shape[:2] # numpy tensor
     center = (w // 2, h // 2)
     M = cv2.getRotationMatrix2D(center, angle, scale)
     transformed = cv2.warpAffine(glasses, M, (w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
@@ -357,7 +404,7 @@ def add_colored_shapes(image_tensor: torch.Tensor, cover_ratio: float = 0.07, us
         return image_tensor
     
     image = (image_tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-    h, w = image.shape[:2]
+    h, w = image.shape[:2] # numpy tensor
     total_area = h * w
     target_area = total_area * cover_ratio
     covered_area = 0
@@ -425,7 +472,7 @@ def scale_img(img, scale, mode = 'bilinear'):
     
     return scale
 
-def noise_tensor(img, noise_factor, noise_sizes = [1, 2, 4, 8]):
+def noise_tensor(img, noise_factor=0.0, noise_sizes = [1, 2, 4, 8]):
     """
     if noise_tensor empty, no add noise
     Во сколько раз уменьшать картинку, список значений.
@@ -512,7 +559,7 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
 
         if (x > small_x):
             down_scale_img = scale_img(img, scale, mode = interpolate_mode)
-            
+
             cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
             cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
 
@@ -549,6 +596,8 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
     
     # Вращение координат
     coords = rotate_coords(coords, angle)
+
+    img, coords = shift_image_coords(img, coords)
 
     # Добавление шума
     if noise > 0:
