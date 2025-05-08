@@ -224,7 +224,7 @@ def get_eye_centers(landmarks_px):
 
 
 
-def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor, fill_color = (0,0,0)) -> tuple[torch.Tensor, torch.Tensor]:
     C, H, W = image_tensor.shape
 
     shift_x = torch.empty(1).uniform_(SHIFT_LEFT_COEF, SHIFT_RIGHT_COEF).item()
@@ -233,17 +233,11 @@ def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor) 
     shift_px_x = int(shift_x * W)
     shift_px_y = int(shift_y * H)
 
-    print(shift_x, shift_px_x)
-    print(shift_y, shift_px_y)
-    
     # Вычисляем координаты для исходного и нового положения
     src_x_start = max(0, -shift_px_x) # если сдвинется влево, первый px_x пикселей нам не нужны из оригинала
     src_x_end = min(W, W - shift_px_x) # если сдвинется вправо, последние px_x пикселей не понадобятся
     dst_x_start = max(0, shift_px_x) # куда вставлять ОТ
     dst_x_end = min(W, W + shift_px_x) # куда вставлять ДО
-
-    print(src_x_start, dst_x_start)
-    print(src_x_end, dst_x_end)
 
     src_y_start = max(0, -shift_px_y)
     src_y_end = min(H, H - shift_px_y)
@@ -252,6 +246,11 @@ def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor) 
     
     # Создаём пустой холст
     image_shifted = torch.zeros_like(image_tensor)
+    (r,g,b) = fill_color
+    image_shifted[0, :, :] = r
+    image_shifted[1, :, :] = g
+    image_shifted[2, :, :] = b
+    
     # Копируем содержимое
     image_shifted[:, dst_y_start:dst_y_end, dst_x_start:dst_x_end] = image_tensor[:, src_y_start:src_y_end, src_x_start:src_x_end]
 
@@ -585,19 +584,21 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
             coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
 
     # Заполнение чёрных углов и контуров цветом
+    fill_color = None
     if angleFiller == "MEAN":
-        img = F.rotate(img, angle, fill=tuple(mean_color))
-        
+        fill_color = mean_color
     elif angleFiller == "INPAINT":
-    # Заменяем средний цвет на черный (для удобства)
-        black_color = (0, 0, 0)  # Черный цвет для заполнения
-        img = F.rotate(img, angle, fill=black_color)
-        img = in_paint(img) # instead of mean color
-    
+        # Заменяем средний цвет на черный (для удобства)
+        fill_color = (0, 0, 0)
+
+    img = F.rotate(img, angle, fill=fill_color)
     # Вращение координат
     coords = rotate_coords(coords, angle)
 
-    img, coords = shift_image_coords(img, coords)
+    img, coords = shift_image_coords(img, coords, fill_color)
+
+    if angleFiller == "INPAINT":
+        img = in_paint(img) # instead of mean color
 
     # Добавление шума
     if noise > 0:
