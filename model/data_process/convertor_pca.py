@@ -6,6 +6,8 @@ import joblib
 from sklearn.decomposition import PCA
 import time
 
+PCA_COUNT = 40
+
 class MakerPCA():
     def __init__(self):
         self.pca = PCA()
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     registry_path = os.path.join(current_path, 'registry')
     dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'))
     print('loaded')
-    convertor = MakerPCA().fit(dataset, 40, verbose=True)
+    convertor = MakerPCA().fit(dataset, PCA_COUNT, verbose=True)
     print('fitted')
     # convertor = MakerPCA().load('pcaweights.pca')
     

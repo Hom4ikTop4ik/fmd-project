@@ -10,9 +10,9 @@ max_scale = 1.2
 blur_level = 7
 
 epochs = 50
-batch_size = 40
+BATCH_SIZE = 64
 imgs_count = 20000
-total_iterations = imgs_count // batch_size
+total_iterations = imgs_count // BATCH_SIZE
 
 iter_k = 20
 

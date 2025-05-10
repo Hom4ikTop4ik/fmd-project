@@ -7,36 +7,28 @@ import torch.nn as nn
 import numpy as np
 import time
 
-### new
 from datetime import datetime
-# from torch.utils.tensorboard import SummaryWriter
-import locale
-###
 
 
-from data_process.convertor_pca import MakerPCA
+from data_process.convertor_pca import MakerPCA, PCA_COUNT
 from detector.blocked import MultyLayer
 
 from data_process import make_filter, scale_img
-from data_process import load, noise, rotate, min_scale, max_scale, epochs, batch_size, total_iterations, iter_k
-from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA, MODE
+from data_process import load, noise, rotate, min_scale, max_scale, epochs, BATCH_SIZE, total_iterations, iter_k
+from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA, NET, MODE
 
-###### old
 import tb.log_frog as log_frog
-######
-
-### new
-###
 
 DOTS = 72
 
-### new
-
-###
-
+head_desc1 = [
+    ('linear', 128), 
+    ('linear', 64), 
+    ('linear', PCA_COUNT)
+]
 
 def interactor(signal, frame):
-    print('SIGINT was received.')
+    print('\n\nSIGINT was received.')
     while DA:
         cmd = input('Choose action: save/exit (continue by default): ')
         match cmd:
@@ -47,10 +39,10 @@ def interactor(signal, frame):
                 writer.close()
             case 'test':
                 print("no test, rerun program")
-                # model_test(look=False)
+                # model_test(look=NET)
             case 'look':
                 print("no look, rerun program")
-                # model_test(look=True)
+                # model_test(look=DA)
 
             case 'exit':
                 writer.close()
@@ -65,7 +57,7 @@ def interactor(signal, frame):
                 writer.close()
                 sys.exit(0)
 
-def model_test(look=False):
+def model_test(look=NET):
     with torch.no_grad():
         iteration = 0
         loss = 0.0
@@ -81,7 +73,7 @@ def model_test(look=False):
             iteration += 1
 
             if look:
-                for i in range(batch_size):
+                for i in range(BATCH_SIZE):
                     ans_i = ans[i:i+1].to("cpu")
                     dec = mypca.decompress(ans_i)
                     PCA2coords = dec.reshape(-1, 3, DOTS).permute(0, 2, 1)
@@ -92,7 +84,7 @@ def model_test(look=False):
         print(f'Test loss: {avg_loss}')
         print(f'Iterations count {iteration}')
 
-def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth=True):
+def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth=DA):
     predict = predict[0]
     img = scale_img(imgtens, 2, "bilinear")
     newimg = (img[[0,1,2], :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
@@ -133,18 +125,18 @@ def main():
     log_frog.setup()
     
     device = 'cpu'
-    if (USE_CPU_WHATEVER == False):
+    if (USE_CPU_WHATEVER == NET):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     log_subdir = datetime.now().strftime("%Y%m%d_%H%M%S")
     logs_dir = os.path.join(current_dir, 'logs', log_subdir)
-    os.makedirs(logs_dir, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=DA)
     writer, log_frog_dir = log_frog.get_writer(logs_dir)
     print(f"Log directory: {log_frog_dir}")
 
 
-    model = MultyLayer(device).to(device)
+    model = MultyLayer(device, PCA_COUNT, head_desc=head_desc1).to(device)
     if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
         print(f"Loaded weights from {weight_save_path}")
         model.load_state_dict(torch.load(weight_save_path))
@@ -154,7 +146,7 @@ def main():
     print("Loading DataLoader...")
     start_loading_dataloader = time.time()
     dataloader, sampler = load(
-        bsize=batch_size,
+        bsize=BATCH_SIZE,
         dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
         device=device,
         coords_dir="coords",
@@ -180,10 +172,10 @@ def main():
     match MODE:
         case "test":
             print("Test loss mode")
-            model_test(look = False)
+            model_test(look = NET)
         case "look":
             print("Look mode")
-            model_test(look = True)
+            model_test(look = DA)
         case "train":
             print("Train mode")
             print(f"Device: {device}, Noise: {noise}, Rotate: {rotate}, min_scale: {min_scale}, max_scale: {max_scale}")
@@ -261,8 +253,8 @@ def main():
 
                 # # NO, PLEASE, NO. IT WILL START TEST ALL DATASET 💀 (about 20k images!)      
                 # if epoch % 2 == 0:
-                #     print("Let's start model_test(look=True)!")
-                #     model_test(look=True)
+                #     print("Let's start model_test(look=DA)!")
+                #     model_test(look=DA)
         
             # Save after all iterations
             if (input("\nDo you wanna save weigths? (y/n) ")[0] in 'yYнН'):

@@ -7,7 +7,7 @@ import re
 from torch.utils.data import Dataset, DataLoader
 from data_process.__init__ import noise, rotate, min_scale, max_scale, blur_level
 from data_process.augments import augment_image, scale_img, show_image
-from data_process.__init__ import USE_CPU_WHATEVER, DA, NET
+from data_process.__init__ import USE_CPU_WHATEVER, DA, NET, BATCH_SIZE
 
 from torch.utils.data import Sampler
 import random
@@ -79,7 +79,7 @@ def collate_fn(batch):
     return images, coords
 
 def load(
-        bsize: int = 40, 
+        bsize: int = BATCH_SIZE, 
         dataset_path: str = '.', 
         images_dir: str = 'images', 
         coords_dir: str = 'coords',
