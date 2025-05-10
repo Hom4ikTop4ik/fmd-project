@@ -39,13 +39,13 @@ class ConvFeatureExtractor(nn.Module):
         layers = []
         for desc in conv_layers_description:
             typee = desc[0].lower()
-            if typee == 'conv':
+            if typee in ['conv']:
                 _, in_ch, out_ch, k, s, p = desc
                 layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=k, stride=s, padding=p).to(device))
-            elif typee == 'convblock':
+            elif typee in ['convblock']:
                 _, in_ch, out_ch = desc
                 layers.append(ConvBlock(device, in_ch, out_ch))
-            elif typee == 'batch':
+            elif typee in ['batch']:
                 _, ch = desc
                 layers.append(nn.BatchNorm2d(ch).to(device))
             else:
@@ -82,14 +82,14 @@ class Head(nn.Module):
         layers = []
         current_size = insize
 
-        for cur in head_description:
+        for desc in head_description:
             """
-            cur = (type, size) or just (type)
+            desc = (type, size) or just (type)
             """
-            typee = cur[0].lower()
+            typee = desc[0].lower()
 
             if typee in ['linear']:
-                next_size = cur[1]
+                next_size = desc[1]
                 layers.append(nn.Linear(current_size, next_size))
                 current_size = next_size
 
@@ -98,13 +98,16 @@ class Head(nn.Module):
 
             elif typee in ['leaky', 'leakyrelu']:
                 arg = 0.01 # bazovichok
-                if len(cur) > 1:
-                    arg = cur[1]
+                if len(desc) > 1:
+                    arg = desc[1]
                 layers.append(nn.LeakyReLU(arg).to(device))
 
             elif typee in ['drop', 'dropout']:
-                dropout_prob = cur[1]
+                dropout_prob = desc[1]
                 layers.append(nn.Dropout(dropout_prob))
+                
+            else:
+                raise ValueError(f'Unknown layer type: {desc[0]}')
 
 
         self.model = nn.Sequential(*layers).to(device) # звёздочка для распаковки списка в кучу аргументов
