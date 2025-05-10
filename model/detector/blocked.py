@@ -1,4 +1,9 @@
+import torch
 import torch.nn as nn
+
+DA = True
+NET = False
+POFIG = NET
 
 class ConvBlock(nn.Module):
     def __init__(self, device, insize, outsize):
@@ -28,28 +33,79 @@ class ConvBlock(nn.Module):
         x = self.act(self.conv3(x))
         return self.pool(x) + self.skipconv(x1)
 
+class ConvFeatureExtractor(nn.Module):
+    def __init__(self, device, conv_layers_description):
+        super(ConvFeatureExtractor, self).__init__()
+        layers = []
+        for desc in conv_layers_description:
+            typee = desc[0].lower()
+            if typee == 'conv':
+                _, in_ch, out_ch, k, s, p = desc
+                layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=k, stride=s, padding=p).to(device))
+            elif typee == 'convblock':
+                _, in_ch, out_ch = desc
+                layers.append(ConvBlock(device, in_ch, out_ch))
+            elif typee == 'batch':
+                _, ch = desc
+                layers.append(nn.BatchNorm2d(ch).to(device))
+            else:
+                raise ValueError(f'Unknown layer type: {desc[0]}')
+            
+        self.model = nn.Sequential(*layers)
+
+    def get_output_size(self, input_size, device):
+        """
+        Пропускает фиктивное изображение через conv-модель и возвращает выходной размер.
+        Для вычисления выходного размера после свёртки и пулинга.
+        """
+        was_training = self.model.training  # запомним состояние
+        self.model.eval()  # выключаем dropout и batchnorm training-mode
+
+        with torch.no_grad():
+            x = torch.randn(1, 3, *input_size).to(device)  # Создаём случайный тензор с размерами [1, 3, H, W]
+            for layer in self.model:
+                x = layer(x)  # Пропускаем через все слои
+
+        if was_training:
+            self.model.train()  # восстановим исходное состояние
+
+        return int(torch.prod(torch.tensor(x.shape[1:])))  # Возвращаем размерность выходного тензора (кроме размера батча)
+    
+    def forward(self, x):
+        return self.model(x)
+
 class Head(nn.Module):
-    def __init__(self, device, insize, layer_sizes, use_bn=True, dropout_prob=0.0):
+    def __init__(self, device, insize, head_description):
         super(Head, self).__init__()
         self.insize = insize
-        self.use_bn = use_bn
-        self.dropout_prob = dropout_prob
 
         layers = []
         current_size = insize
 
-        for next_size in layer_sizes:
-            layers.append(nn.Linear(current_size, next_size))
+        for cur in head_description:
+            """
+            cur = (type, size) or just (type)
+            """
+            typee = cur[0].lower()
 
-            if use_bn:
-                layers.append(nn.BatchNorm1d(next_size))
+            if typee in ['linear']:
+                next_size = cur[1]
+                layers.append(nn.Linear(current_size, next_size))
+                current_size = next_size
 
-            layers.append(nn.LeakyReLU(0.01).to(device))
+            elif typee in ['batch']:
+                layers.append(nn.BatchNorm1d(current_size))
 
-            if dropout_prob > 0:
+            elif typee in ['leaky', 'leakyrelu']:
+                arg = 0.01 # bazovichok
+                if len(cur) > 1:
+                    arg = cur[1]
+                layers.append(nn.LeakyReLU(arg).to(device))
+
+            elif typee in ['drop', 'dropout']:
+                dropout_prob = cur[1]
                 layers.append(nn.Dropout(dropout_prob))
 
-            current_size = next_size
 
         self.model = nn.Sequential(*layers).to(device) # звёздочка для распаковки списка в кучу аргументов
 
@@ -62,61 +118,57 @@ def print1(x):
     pass
 
 class MultyLayer(nn.Module):
-    def __init__(self, device):
+    def __init__(self, device, PCA_COUNT, conv_desc = None, head_desc = None, IMG_SIZE = (512, 512)):
         super(MultyLayer, self).__init__()
-        self.pulconv = nn.Conv2d(3, 3, 7, stride=2, padding=3).to(device) 
-        # out_size = floor((512 - kernel_size + 2*padding)/stride) + 1
-        # out_size = (512 - 7 + 6)//2 + 1 = 511//2 + 1 = 256
-
-        self.cblock1 = ConvBlock(device, 3, 6) # 256*256 -> 128x128
-        self.bn1 = nn.BatchNorm2d(6).to(device)
-        self.cblock2 = ConvBlock(device, 6, 9) # 128*128 -> 64x64
-        self.bn2 = nn.BatchNorm2d(9).to(device)
-        self.cblock3 = ConvBlock(device, 9, 16) # 64*64 -> 32x32
-        self.bn3 = nn.BatchNorm2d(16).to(device)
-        self.cblock4 = ConvBlock(device, 16, 32) # 32*32 -> 16x16
-        self.bn4 = nn.BatchNorm2d(32).to(device)
-        self.cblock5 = ConvBlock(device, 32, 64) # 16*16 -> 8x8
-        self.bn5 = nn.BatchNorm2d(64).to(device)
-        self.cblock6 = ConvBlock(device, 64, 128) # 8*8 -> 4x4
-        self.bn6 = nn.BatchNorm2d(128).to(device)
-        self.cblock7 = ConvBlock(device, 128, 256) # 4*4 -> 2*2
-        self.bn7 = nn.BatchNorm2d(256).to(device)
         
-        self.cblock_final = ConvBlock(device, 256, 256) # 2*2 -> 1*1
-        self.bn_final = nn.BatchNorm2d(256).to(device)
+        # base
+        self.conv_description = [
+            #         in_ch, out_ch, k, s, p
+            ('conv',      3, 3,      7, 2, 3),  # pulconv: 512 -> 256
+            ('convblock', 3, 6),                # 256 -> 128
+            ('batch',     6),
+            ('convblock', 6, 9),                # 128 -> 64
+            ('batch',     9),
+            ('convblock', 9, 16),               # 64 -> 32
+            ('batch',     16),
+            ('convblock', 16, 32),              # 32 -> 16
+            ('batch',     32),
+            ('convblock', 32, 64),              # 16 -> 8
+            ('batch',     64),
+            ('convblock', 64, 128),             # 8 -> 4
+            ('batch',     128),
+            ('convblock', 128, 256),            # 4 -> 2
+            ('batch',     256),
+            ('convblock', 256, 256),            # 2 -> 1
+            ('batch',     256)
+        ]
+        if conv_desc:
+            self.conv_description = conv_desc
 
-        # now tensor size is [40, 256, 1, 1]
+        # base
+        self.head_description = [
+            ('linear', 128), 
+            ('linear', 64), 
+            ('linear', PCA_COUNT)
+        ]
+        if head_desc:
+            self.head_description = head_desc
 
-        # # input_size = 256, mid_size = 128, output_size=PCA_count=40
-        # self.head_old = Head_old(device, 256, 128, 40)
-        # # is equals
-        # self.head = Head(device, insize=256, layer_sizes=[128, 40], use_bn=False, dropout_prob=0.0) 
+        self.conv_extractor = ConvFeatureExtractor(device, self.conv_description)
+        # Получаем выходной размер
+        conv_output_size = self.conv_extractor.get_output_size(IMG_SIZE, device)  # Размер входа 512x512
         
-        self.head = Head(device, insize=256, layer_sizes=[128, 64, 40], use_bn=False, dropout_prob=0.0) 
+        self.head = Head(
+            device,
+            insize=conv_output_size,
+            head_description=self.head_description
+        )
 
     def forward(self, x):
-        # Input: [batch, 3, H, W]
-        print1(x.shape)
-        x = self.pulconv(x)
-        print1(x.shape)
-        x = self.bn1(self.cblock1(x))
-        print1(x.shape)
-        x = self.bn2(self.cblock2(x))
-        print1(x.shape)
-        x = self.bn3(self.cblock3(x))
-        print1(x.shape)
-        x = self.bn4(self.cblock4(x))
-        print1(x.shape)
-        x = self.bn5(self.cblock5(x))
-        print1(x.shape)
-        x = self.bn6(self.cblock6(x))
-        print1(x.shape)
-        x = self.bn7(self.cblock7(x))
-        print1(x.shape)
-        x = self.bn_final(self.cblock_final(x))
-        print1(x.shape)
-        x = self.head(x)
-        print1(x.shape)
-        x = x.view(-1, 40)
+        x = self.conv_extractor(x)  # [B, C, H, W]
+        if POFIG:
+            # если провалились с размерами слоёв, но хотим чтобы модель не упала
+            x = x.view(x.size(0), -1)   # [B, C*H*W]
+        x = self.head(x)            # подаём в полносвязную часть
+        x = x.view(-1, x.shape[1])  # например, -1, 40
         return x
