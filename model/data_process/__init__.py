@@ -4,18 +4,20 @@ from .augments import *
 from .utils import *
 from .convertor_pca import MakerPCA
 
-noise = 0.15
-rotate = 30
-min_scale = 1
-max_scale = 1
+noise = 0.05
+rotate = 45
+min_scale = 0.8
+max_scale = 1.2
+blur_level = 7
 
-epochs = 4
-batch_size = 60
+epochs = 50
+BATCH_SIZE = 64
 imgs_count = 20000
-part = 0.9
-total_iterations = int(imgs_count * part) // batch_size
+total_iterations = imgs_count // BATCH_SIZE
 
 iter_k = 20
+
+MODE = "train"
 
 DA = True
 NET = False

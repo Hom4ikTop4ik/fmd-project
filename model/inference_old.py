@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import cv2
 import numpy as np
-from data_process import MakerPCA
+from data_process.convertor_pca import MakerPCA, PCA_COUNT
 from detector import MultyLayer
 from scipy.spatial import Delaunay
 import os
@@ -37,7 +37,7 @@ def delaunay_to_obj(points, first_delaune, filename="output.obj"):
             f.write(f"f {simplex[0] + 1} {simplex[1] + 1} {simplex[2] + 1}\n")
 
 def visualize_delaunay(points, img):
-    img_width, img_height = 432, 432
+    img_width, img_height = 512, 512
     points2d = points[:, :2]
     img_points = (points2d * np.array([img_width, img_height])).astype(np.int32)
     # img = np.zeros((img_height, img_width, 3), dtype=np.uint8)
@@ -59,10 +59,19 @@ def visualize_delaunay(points, img):
         cv2.putText(img, f"{i}", tuple(p), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1, cv2.LINE_AA)
     return img
 
+head_desc1 = [
+    ('linear', 512), 
+    ('linear', 384), 
+    ('linear', 256), 
+    ('linear', 128), 
+    ('linear', 512), 
+    ('linear', 64), 
+    ('linear', PCA_COUNT)
+]
 
 def test(videopath, outpath):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    det1 = MultyLayer(device).to(device)
+    det1 = MultyLayer(device, PCA_COUNT, head_desc=head_desc1).to(device)
     
     current_path = os.path.dirname(os.path.abspath(__file__))
     registry_path = os.path.join(current_path, 'registry')
@@ -83,7 +92,7 @@ def test(videopath, outpath):
         cap = cv2.VideoCapture(videopath)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(outpath, fourcc, 15.0, (432,432)) #имя файла, кодек, fps, размер кадра
+    out = cv2.VideoWriter(outpath, fourcc, 15.0, (512,512)) #имя файла, кодек, fps, размер кадра
 
     frameid = 0
 
@@ -93,8 +102,11 @@ def test(videopath, outpath):
         # Capture frame-by-frame
         ret, frame = cap.read()
         # frame = cv2.resize(frame, (720, 432))
+        frame = cv2.resize(frame, (683, 512))
+        # frame = cv2.resize(frame, (910, 512))
         frame = torch.from_numpy(frame.astype(np.float32)).to(device) / 255
-        imgtens = frame.permute(2, 0, 1)[:, 0:432, 0:432].unsqueeze(0)
+        imgtens = frame.permute(2, 0, 1)[:, 0:512, 0+160:512+160].unsqueeze(0)
+        # imgtens = frame.permute(2, 0, 1)[:, 0:512, 0+199:512+199].unsqueeze(0)
         print(imgtens.shape)
         predict = det1(imgtens)
         predict = mypca.decompress(predict).reshape(-1, 3, 72).permute(0, 2, 1)

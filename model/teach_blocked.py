@@ -7,19 +7,28 @@ import torch.nn as nn
 import numpy as np
 import time
 
-from data_process.convertor_pca import MakerPCA
+from datetime import datetime
+
+
+from data_process.convertor_pca import MakerPCA, PCA_COUNT
 from detector.blocked import MultyLayer
 
 from data_process import make_filter, scale_img
-from data_process import load, noise, rotate, min_scale, max_scale, epochs, batch_size, imgs_count, total_iterations, iter_k
-from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA
+from data_process import load, noise, rotate, min_scale, max_scale, epochs, BATCH_SIZE, total_iterations, iter_k
+from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA, NET, MODE
 
-from tb.log_frog import get_writer
+import tb.log_frog as log_frog
 
 DOTS = 72
 
+head_desc1 = [
+    ('linear', 128), 
+    ('linear', 64), 
+    ('linear', PCA_COUNT)
+]
+
 def interactor(signal, frame):
-    print('SIGINT was received.')
+    print('\n\nSIGINT was received.')
     while DA:
         cmd = input('Choose action: save/exit (continue by default): ')
         match cmd:
@@ -27,246 +36,245 @@ def interactor(signal, frame):
                 path = weight_save_path
                 print(f'saving to {path}')
                 torch.save(model.state_dict(), path)
+                writer.close()
             case 'test':
                 print("no test, rerun program")
-                # model_test(look=False)
+                # model_test(look=NET)
             case 'look':
                 print("no look, rerun program")
-                # model_test(look=True)
+                # model_test(look=DA)
 
             case 'exit':
+                writer.close()
                 sys.exit(0)
             case 'учше':
+                writer.close()
                 sys.exit(0)
             case 'clear':
+                writer.close()
                 sys.exit(0)
             case 'сдуфк':
+                writer.close()
                 sys.exit(0)
-        
 
-def model_test(look=False):
+def model_test(look=NET):
     with torch.no_grad():
         iteration = 0
         loss = 0.0
         for bt_images, bt_coords in iter(dataloader):
-            
             bt_images = bt_images.to(device)
             bt_coords = bt_coords.to(device)
             
             truth = mypca.compress(bt_coords).to(device)
-            print(truth.shape)
             ans = model(bt_images)
-            print(ans.shape)
 
-            loss += criterion(ans, truth)
-
+            current_loss = criterion(ans, truth)
+            loss += current_loss # delete log_frog.format_number() chtobi poter menshe bilo
             iteration += 1
+
             if look:
-                for i in range(40): # batch size
-                    print(ans[i].shape)
+                for i in range(BATCH_SIZE):
                     ans_i = ans[i:i+1].to("cpu")
-                    print(ans_i)
                     dec = mypca.decompress(ans_i)
-                    print(dec)
                     PCA2coords = dec.reshape(-1, 3, DOTS).permute(0, 2, 1)
                     look_predict(bt_images[i], PCA2coords)
-            print(f'total loss {loss / iteration}')
         
-        print(f'total loss {loss / iteration}')
-        print(f'total iterations count {iteration}')
+        avg_loss = log_frog.format_number(loss / iteration)
+        writer.add_scalar('test_loss', avg_loss, global_step=global_iteration)
+        print(f'Test loss: {avg_loss}')
+        print(f'Iterations count {iteration}')
 
-def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth = True):
+def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth=DA):
     predict = predict[0]
-    # print(predict)
-    print(predict[0])
-    print(imgtens.shape)
     img = scale_img(imgtens, 2, "bilinear")
     newimg = (img[[0,1,2], :, :].cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
-
     newimg = np.ascontiguousarray(newimg)
+    
     for coord in predict:
         x, y, value = coord[0], coord[1], coord[2]
         x_pixel = int(x * newimg.shape[1])
         y_pixel = int(y * newimg.shape[0])
-        newimg = cv2.circle(newimg, (x_pixel, y_pixel), 2, (255, 255, 255), 2)
-        if (show_depth):
-            text = f"{value:.2f}"
-            cv2.putText(newimg, text, (x_pixel + 5, y_pixel - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.circle(newimg, (x_pixel, y_pixel), 2, (255, 255, 255), 2)
+        if show_depth:
+            cv2.putText(newimg, f"{value:.4f}", (x_pixel + 5, y_pixel - 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    
+    cv2.imshow("Prediction", newimg)
+    cv2.waitKey(1000)
 
-    cv2.imshow("img", newimg)
-    cv2.waitKey(0)
-
-def gen_lim(generator, percent):
-    for i, obj in enumerate(generator):
-        if i >= percent * len(generator):
-            break
-        yield obj
-
-
-def print_progress_bar(iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
+def print_progress_bar(start_if_line: str, iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
     percent = (iteration / total) * 100
-    bar_length = 10  # Length of the progress bar
+    bar_length = 10
     block = int(round(2*bar_length * percent / 100))
     progress = '▓' * (block//2) + '▒' * (block%2) + '░' * (bar_length - block // 2 - block % 2)
-    sys.stdout.write(f'\r[{progress}] {percent:3.0f}% (Epoch: {epoch}/{epochs}, Iteration: {iteration}/{total}, Iter/s: {iter_per_second:4.2f}, Loss: {loss:.5f}, Average Loss: {average_loss:.5f}, Median Loss: {median_loss:.5f})')
+    sys.stdout.write(f'\r{start_if_line}[{progress}] {percent:3.0f}% (Epoch: {epoch}/{epochs}, Iteration: {iteration}/{total}, Iter/s: {iter_per_second:4.2f}, Loss: {loss:.4f}, Avg: {average_loss:.4f}, Med: {median_loss:.4f})')
     sys.stdout.flush()
 
-print(time.time())
 
 def passer(a, b):
     pass
 signal.signal(signal.SIGINT, passer)
 
-    
 current_dir = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_dir, 'registry')
 weight_save_path = os.path.join(registry_path, 'weights', 'model_bns.pth')
 
-# mypca = MakerPCA()
-# mypca.load(os.path.join(current_dir,'data_process/pcaweights.pca'))
-
-
 def main():
-    global dataloader, device, model, optimizer, criterion, coordfilter, current_dir, registry_path, weight_save_path, mypca
-
+    global dataloader, device, model, optimizer, criterion, coordfilter, mypca, writer, global_iteration
+    
+    log_frog.setup()
+    
     device = 'cpu'
-    if (USE_CPU_WHATEVER == False):
+    if (USE_CPU_WHATEVER == NET):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print("devise is: ", device)
+    print(f"Using device: {device}")
 
-    print("Start  load dataset with time: {}".format(time.time()))
-    dataloader, sampler = load(
-        bsize=batch_size, 
-        dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
-        device=device,
-        coords_dir = "extended_coords"
-    )
-    print("Finish load dataset with time: {}".format(time.time()))
+    log_subdir = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = os.path.join(current_dir, 'logs', log_subdir)
+    os.makedirs(logs_dir, exist_ok=DA)
+    writer, log_frog_dir = log_frog.get_writer(logs_dir)
+    print(f"Log directory: {log_frog_dir}")
 
-    model = MultyLayer(device).to(device)
-    if False or input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
-        print(weight_save_path)
+
+    model = MultyLayer(device, PCA_COUNT, head_desc=head_desc1).to(device)
+    if input('load weigths from selected weight save path? (y/n) ') in 'yYнН':
+        print(f"Loaded weights from {weight_save_path}")
         model.load_state_dict(torch.load(weight_save_path))
         # model.load_state_dict(torch.load(weight_save_path, map_location = device))
 
 
-    signal.signal(signal.SIGINT, interactor) # AFTER init model we can save weights 
+    print("Loading DataLoader...")
+    start_loading_dataloader = time.time()
+    dataloader, sampler = load(
+        bsize=BATCH_SIZE,
+        dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
+        device=device,
+        coords_dir="coords",
+        sampler_seed=int(time.time())
+    )
+
+    signal.signal(signal.SIGINT, interactor) # I WANT CLOSE PROGRAM
+    
+    # launch workers
+    next(iter(dataloader))
+    print(f"Finish load DataLoader after {log_frog.format_number(time.time() - start_loading_dataloader)} secs")
 
     optimizer = torch.optim.Adam(model.parameters(), 0.001, betas=(0.9, 0.95))
     criterion = nn.MSELoss().to(device)
     coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
 
     mypca = MakerPCA()
-    mypca.load(os.path.join(current_dir,'data_process/pcaweights_ext.pca'))
+    mypca.load(os.path.join(current_dir, 'data_process', 'pcaweights_ext.pca'))
 
-    # writer = new SummaryWriter(log_dir)
-    writer = get_writer()
-
-    # a1 = input("train or test? ")
-    a1 = "train" # "train" or "test", or "look"
-    if (a1 != "train"):
-        # a1 = input("test or look? ")0
-        if (a1 == "test"):
+    global_iteration = 0
+    start_time = time.time()
+    
+    match MODE:
+        case "test":
             print("Test loss mode")
-            model_test(look = False)
-        else:
+            model_test(look = NET)
+        case "look":
             print("Look mode")
-            model_test(look = True)
-    else:
-        print("Train mode")
-        # Learning cycle
-        pupupu = time.time()
-        print(f"Start epochs with time: {pupupu:.2f}")
-        for epoch in range(epochs):
-            print(f'Starting Epoch {epoch + 1}/{epochs}')
-            print(f'Start time: {time.time() - pupupu:.2f} Device: {device}, Noise: {noise}, Rotate: {rotate}')
+            model_test(look = DA)
+        case "train":
+            print("Train mode")
+            print(f"Device: {device}, Noise: {noise}, Rotate: {rotate}, min_scale: {min_scale}, max_scale: {max_scale}")
+            pupupu = time.time()
+            print(f"\tStart epochs with time: {pupupu:.2f}")
+            # Learning cycle
+            for epoch in range(epochs):
+                print(f'\t\tStarting Epoch {epoch + 1}/{epochs}, time: {log_frog.format_number(time.time() - pupupu)}')
 
-            iter_times = []
-            iter_loss = []
-            average_loss = 1
-            median_loss = 1
+                iter_times = []
+                iter_loss = []
+                average_loss = 1
+                median_loss = 1
 
-            # next_seed = epoch + int(time.time())
-            next_seed = epoch
-            sampler.set_seed(next_seed) # new shuffle
-            dataloader_iterator = iter(dataloader)
+                next_seed = epoch
+                next_seed += int(time.time())
+                sampler.set_seed(next_seed) # new shuffle
+                dataloader_iterator = iter(dataloader)
 
-            for iteration in range(1, total_iterations + 1):
-                bt_images, bt_coords = next(dataloader_iterator)
-            # iteration = 0
-            # for bt_images, bt_coords in dataloader_iterator:
-                # iteration += 1
+                epoch_loss = 0.0
 
-                # Move tensors to the device
-                bt_images = bt_images.to(device)
-                bt_coords = bt_coords.to(device)
+                for iteration in range(1, total_iterations + 1):
+                    bt_images, bt_coords = next(dataloader_iterator)
 
-                # Training code
-                truth = mypca.compress(bt_coords).to(device)
-                
-                ans = model(bt_images)
-                loss = criterion(ans, truth)
-                optimizer.zero_grad()
-                
-                loss.backward()
-                optimizer.step()
+                    # Move tensors to the device
+                    bt_images = bt_images.to(device)
+                    bt_coords = bt_coords.to(device)
 
-                
-                if iteration % 2500 == 0:
-                    img = bt_images[0].permute(1, 2, 0).cpu().numpy()
-                    img = np.clip(img, 0, 1)
-                    cv2.imshow('img', img)
-                    cv2.waitKey(0)
-                    cv2.destroyAllWindows()
+                    # Training code
+                    truth = mypca.compress(bt_coords).to(device)
                     
-
-                    # dec_answer = mypca.decompress(ans[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
-                    # dec_truth = mypca.decompress(truth[:1]).reshape(-1, 3, DOTS).permute(0, 2, 1)
-                    # print('dec ans shape: ', dec_answer.shape)
-                    # print('dec tru shape: ', dec_answer.shape)
-                    # look_predict(bt_images, dec_truth)
-                    # look_predict(bt_images, dec_answer)
+                    ans = model(bt_images)
+                    loss = criterion(ans, truth)
+                    optimizer.zero_grad()
+                    
+                    loss.backward()
+                    optimizer.step()
                 
-                if PROGRESS_BAR:
-                    # Record the time taken for this iteration
-                    iter_times.append(time.time())
-                    iter_loss.append(loss)
-                    l = len(iter_times)
+                    epoch_loss += loss
+                    formatted_loss = log_frog.format_number(loss)
+                    writer.add_scalar('loss', formatted_loss, global_iteration)
 
-                    # Keep only the last k times
-                    if l > iter_k:
-                        iter_times.pop(0)
-                        iter_loss.pop(0)
+                    if global_iteration % log_frog.LOG_IMAGES_EVERY == 0:
+                        with torch.no_grad():
+                            pred_coords = mypca.decompress(ans).reshape(-1, 3, DOTS).permute(0, 2, 1)
+                            target_coords = mypca.decompress(truth).reshape(-1, 3, DOTS).permute(0, 2, 1)
+                            log_frog.log_images_to_tensorboard(writer, bt_images, pred_coords, target_coords, global_iteration)
+                
+                    global_iteration += 1
+                    
+                    if PROGRESS_BAR:
+                        # Record the time taken for this iteration
+                        iter_times.append(time.time())
+                        iter_loss.append(loss)
+                        l = len(iter_times)
 
-                    # Calculate iterations per second
-                    if (l > 1):
-                        iter_per_second = l / (iter_times[-1] - iter_times[0])
+                        # Keep only the last k times
+                        if l > iter_k:
+                            iter_times.pop(0)
+                            iter_loss.pop(0)
+
+                        # Calculate iterations per second
+                        if (l > 1):
+                            iter_per_second = l / (iter_times[-1] - iter_times[0])
+                        else:
+                            iter_per_second = 0.00
+                        if (l > 0):
+                            average_loss = sum(iter_loss) / len(iter_loss)
+                            median_loss = iter_loss[l // 2]
+                        
+                        print_progress_bar("\t\t", iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
                     else:
-                        iter_per_second = 0.00
-                    if (l > 0):
-                        average_loss = sum(iter_loss) / len(iter_loss)
-                        median_loss = iter_loss[l // 2]
-                    
-                    # Update the progress bar
-                    print_progress_bar(iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
-                else:
-                    print(f'loss {loss:.5f}, iteration: {iteration}')
-            print("\n")
-
-        
-        print(f"End epochs time: {time.time() - pupupu:.2f}")
-
-        # Save after all iterations
-        if (input("Do you wanna save weigths? (y/n) ")[0] in 'yYнН'):
-            postfix = input(f"Enter a postfix (enter - save to {weight_save_path}): ")
-            if (postfix == ""):
-                path = weight_save_path
-            else:
-                path = os.path.join(registry_path, 'weights', f'model_bns_{postfix}.pth')
+                        print(f'\t\tloss {loss:.5f}, iteration: {iteration}')
             
-            print(f'saving to {path}')
-            torch.save(model.state_dict(), path)
+                print(f"\n\t\tEpoch {epoch+1} completed. Avg loss: {log_frog.format_number(epoch_loss/total_iterations)}\n")
+
+                # # NO, PLEASE, NO. IT WILL START TEST ALL DATASET 💀 (about 20k images!)      
+                # if epoch % 2 == 0:
+                #     print("Let's start model_test(look=DA)!")
+                #     model_test(look=DA)
+        
+            # Save after all iterations
+            if (input("\nDo you wanna save weigths? (y/n) ")[0] in 'yYнН'):
+                postfix = input(f"Enter a postfix (enter key - save to {weight_save_path}): ")
+                if (postfix == ""):
+                    path = weight_save_path
+                else:
+                    path = os.path.join(registry_path, 'weights', f'model_bns_{postfix}.pth')
+                
+                print(f'saving to {path}')
+                torch.save(model.state_dict(), path)
+
+            secs = log_frog.format_number(time.time() - start_time)
+            mins = secs / 60
+            print(f"Total training time: {mins} minutes  or  {secs} seconds")
+    
+    writer.close()
 
 if __name__ == "__main__":
     main()
+else:
+    print(f"\tI'm a worker, and this is a time: {time.time()}")

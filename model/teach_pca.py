@@ -8,7 +8,7 @@ import numpy as np
 # from data_process import MakerPCA
 from data_process import load
 
-from data_process.convertor_pca import MakerPCA
+from data_process.convertor_pca import MakerPCA, PCA_COUNT
 from detector.blocked import MultyLayer
 
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         new_data = gen_lim(1000, dataIterator)
         sampler.set_seed(i)
         print("\t\t")
-        mypca = mypca.fit(new_data, 60, verbose=True)
+        mypca = mypca.fit(new_data, PCA_COUNT, verbose=True)
     print("saving PCA...")
     mypca.save(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
     print("BB!")

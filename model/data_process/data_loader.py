@@ -5,94 +5,12 @@ import numpy as np
 import re
 
 from torch.utils.data import Dataset, DataLoader
-from data_process.__init__ import noise, rotate, min_scale, max_scale
-from data_process.augments import augment_image
-from data_process.__init__ import USE_CPU_WHATEVER, DA, NET
+from data_process.__init__ import noise, rotate, min_scale, max_scale, blur_level
+from data_process.augments import augment_image, scale_img, show_image
+from data_process.__init__ import USE_CPU_WHATEVER, DA, NET, BATCH_SIZE
 
 from torch.utils.data import Sampler
 import random
-
-# BDD doesn't know what is it, but look like very important
-mapping_h2f = {
-    37: 0,
-    66: 1,
-    27: 2,
-    41: 3,
-    58: 4,
-    17: 5,
-    39: 6,
-    48: 7,
-    6: 8,
-    21: 9,
-    8: 10,
-    52: 11,
-    22: 12,
-    25: 13,
-    43: 14,
-    40: 15,
-    24: 16,
-    20: [25, 26],
-    59: 24,
-    3: 23,
-    26: 22,
-    56: 21,
-    10: 20,
-    28: 19,
-    60: [17, 18],
-    53: 36,
-    55: 37,
-    54: 38,
-    36: 39,
-    16: 40,
-    63: 41,
-    62: 42,
-    64: 43,
-    34: 44,
-    13: 45,
-    0: 46,
-    65: 47,
-    5: 27,
-    29: 28,
-    51: 29,
-    30: 30,
-    4: 31,
-    46: 32,
-    45: 33,
-    35: 34,
-    57: 35,
-    44: 48,
-    7: 60,
-    31: 49,
-    49: 50,
-    15: 51,
-    42: 52,
-    32: 53,
-    14: 64,
-    33: 54,
-    2: 55,
-    1: 56,
-    67: 57,
-    47: 58,
-    12: 59,
-    9: 61,
-    50: 62,
-    38: 63,
-    23: 65,
-    18: 66,
-    61: 67
-}
-
-def depth_permute(coords: torch.Tensor):
-    oldcord = coords.clone()
-    for key in mapping_h2f.keys():
-        if type(mapping_h2f[key]) == list:
-            for el in mapping_h2f[key]:
-                coords[key][2] = oldcord[el][2]
-        else:
-            coords[key][2] = oldcord[mapping_h2f[key]][2]
-    return coords
-
-
 
 class EpochShuffleSampler(Sampler):
     def __init__(self, data_len, seed=0):
@@ -147,15 +65,10 @@ class CustomDataset(Dataset):
 
         if self.aug:
             scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
-            image, coords = augment_image(image, coords, rotate, noise, scale)
+            image, coords = augment_image(image, coords, rotate, noise, scale, blur_level)
 
         # image = image.to(self.device)
         # coords = coords.to(self.device)
-
-        # if (DA):
-            # permuted_coords = depth_permute(coords)
-            # print("\t\tcoords permuted")
-            # return image, permuted_coords
 
         return image, coords
 
@@ -166,14 +79,13 @@ def collate_fn(batch):
     return images, coords
 
 def load(
-        bsize: int = 40, 
+        bsize: int = BATCH_SIZE, 
         dataset_path: str = '.', 
         images_dir: str = 'images', 
         coords_dir: str = 'coords',
         device = 'cpu',
         sampler_seed = 0
     ):
-    print(device)
     images_dir_full = os.path.join(dataset_path, images_dir)
     coords_dir_full = os.path.join(dataset_path, coords_dir)
     
@@ -184,12 +96,13 @@ def load(
     # 8 workers and prefetch=3 is about 3GB video memory
 
     num_workers = 8
-    prefetch_factor = 0 if (num_workers > 0) else None 
-    if prefetch_factor == 0:
-        prefetch_factor = None
-    pin = True # not torch.cuda.is_available() or USE_CPU_WHATEVER
+    pin = True # in start device is cpu, so memory_pin is avaiable
 
     # Используем prefetch_factor для предзагрузки данных
+    prefetch_factor = 2
+    if (prefetch_factor == 0) or (num_workers == 0):
+        prefetch_factor = None
+
     dataloader = DataLoader(
         dataset,
         batch_size=bsize,
