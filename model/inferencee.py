@@ -110,7 +110,7 @@ def test(videopath, outpath):
     
     current_path = os.path.dirname(os.path.abspath(__file__))
     registry_path = os.path.join(current_path, 'registry')
-    weight_load_path = os.path.join(registry_path, 'weights', 'model_bns_ft.pth')
+    weight_load_path = os.path.join(registry_path, 'weights', 'model_bns_gray1.pth')
     
     # det1.load_state_dict(torch.load(weight_load_path))
     det1.load_state_dict(torch.load(weight_load_path, map_location=torch.device('cpu')))
