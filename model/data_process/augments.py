@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import torch
+import torch.testing
 import torchvision.transforms.functional as F
 import random
 import time
@@ -33,9 +34,9 @@ max_colored_shape_angle = 45  # degrees
 
 
 SHIFT_LEFT_COEF = -0.2
-SHIFT_RIGHT_COEF = -0.19
-SHIFT_UP_COEF = -0.1
-SHIFT_DOWN_COEF = 0.2
+SHIFT_RIGHT_COEF = 0.2
+SHIFT_UP_COEF = -0.2
+SHIFT_DOWN_COEF = 0.1
 
 
 
@@ -173,8 +174,8 @@ def concat_images_ver(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
     
     return torch.cat((img1, img2), dim=1)
 
-def save_tensor_image_cv2(tensor: torch.Tensor, folder: str = ".", 
-                          rand_range: tuple = (1000, 9999), ext: str = "png") -> str:
+def save_tensor_image_cv2(tensor: torch.Tensor, coords : torch.Tensor = torch.tensor(0.0), folder: str = ".", 
+                          rand_range: tuple = (1000, 9999), ext: str = "png", useCoords = False) -> str:
     """
     Сохраняет изображение из тензора в файл с помощью OpenCV (cv2).
     
@@ -196,6 +197,14 @@ def save_tensor_image_cv2(tensor: torch.Tensor, folder: str = ".",
     if img.max() <= 1.0:
         img = img * 255
     img = np.clip(img, 0, 255).astype(np.uint8)
+
+    
+    if useCoords:
+        for coord in coords:
+            x, y = coord[0], coord[1]
+            img = cv2.circle(img, (int(x * img.shape[1]), int(y * img.shape[0])), 2, (255, 255, 255), 2)
+    
+    
 
     # Генерируем имя
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -471,6 +480,47 @@ def scale_img(img, scale, mode = 'bilinear'):
     
     return scale
 
+def scaler(img_torch : torch.Tensor, coords_torch : torch.Tensor, scale : float = 1.0):
+    img = img_torch.clone()
+    coords = coords_torch.clone()
+
+    if (scale == 1.0):
+        pass
+    elif (scale < 1.0):
+        x, y = img.shape[1], img.shape[2]
+        small_x = int(x * scale)
+        small_y = int(y * scale)
+
+        if (x > small_x):
+            down_scale_img = scale_img(img, scale, mode = interpolate_mode)
+
+            cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
+            cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
+
+            background = torch.zeros_like(img)
+            background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
+            img = background
+            prevsize = (x, y)
+            coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
+    elif (scale > 1.0):
+        x, y = img.shape[1], img.shape[2]
+
+        big_x = int(x * scale)
+        big_y = int(y * scale)
+        if (big_x > x):
+            up_scale_img = scale_img(img, scale, mode = interpolate_mode)
+
+            # Обрезка до исходного размера
+            cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
+            cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
+            img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
+            img = img_cropped
+            prevsize = (big_x, big_y)
+            coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
+    
+    return img, coords
+
+
 def noise_tensor(img, noise_factor=0.0, noise_sizes = [1, 2, 4, 8]):
     """
     if noise_tensor empty, no add noise
@@ -514,6 +564,12 @@ def in_paint(img):
 
         inpainted_img = cv2.resize(inpainted_small_img, (img_cv.shape[1], img_cv.shape[0]))
         
+        # tmp1 = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device)
+        # show_image(tmp1)
+        # sys.exit()
+        # inpainted_img_blurred = add_gaussian_blur(tmp1, blur_level=5)
+        # inpainted_img = inpainted_img_blurred.permute(1, 2, 0).cpu().numpy()
+        
         # Наложение на черные области оригинала
         mask_black_areas = np.all(img_cv == [0, 0, 0], axis=-1)  # Черные области
         img_cv[mask_black_areas] = inpainted_img[mask_black_areas]
@@ -537,51 +593,21 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
         print("Image is not square!")
         return None, None
 
+    # 68/72 точек    
+    # save_tensor_image_cv2(img, coords, useCoords=True)
+    # save_tensor_image_cv2(img, coords[:68], useCoords=True)
+    # sys.exit()
+    
     # img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
     img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
     img = add_gaussian_blur(img, blur_level)
     img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
 
-    # Генерация случайного угла вращения
-    angle = (torch.rand(1, device=img.device) * 2 - 1) * rotate  # От -rotate до +rotate
-    angle = angle.item()
 
     if angleFiller == "MEAN":
         mean_color = img.mean(dim=[1, 2])
 
-    if (scale == 1.0):
-        pass
-    elif (scale < 1.0):
-        x, y = img.shape[1], img.shape[2]
-        small_x = int(x * scale)
-        small_y = int(y * scale)
-
-        if (x > small_x):
-            down_scale_img = scale_img(img, scale, mode = interpolate_mode)
-
-            cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
-            cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
-
-            background = torch.zeros_like(img)
-            background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
-            img = background
-            prevsize = (x, y)
-            coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
-    elif (scale > 1.0):
-        x, y = img.shape[1], img.shape[2]
-
-        big_x = int(x * scale)
-        big_y = int(y * scale)
-        if (big_x > x):
-            up_scale_img = scale_img(img, scale, mode = interpolate_mode)
-
-            # Обрезка до исходного размера
-            cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
-            cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
-            img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
-            img = img_cropped
-            prevsize = (big_x, big_y)
-            coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
+    img, coords = scaler(img, coords, scale)
 
     # Заполнение чёрных углов и контуров цветом
     fill_color = None
@@ -590,6 +616,10 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
     elif angleFiller == "INPAINT":
         # Заменяем средний цвет на черный (для удобства)
         fill_color = (0, 0, 0)
+
+    # Генерация случайного угла вращения
+    angle = (torch.rand(1, device=img.device).item() * 2 - 1) * rotate  # От -rotate до +rotate
+    # angle = angle.item()
 
     img = F.rotate(img, angle, fill=fill_color)
     # Вращение координат

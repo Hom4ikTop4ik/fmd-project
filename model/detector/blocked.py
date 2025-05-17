@@ -5,6 +5,10 @@ DA = True
 NET = False
 POFIG = NET
 
+def print1(x):
+    # print(x)
+    pass
+
 class ConvBlock(nn.Module):
     def __init__(self, device, insize, outsize):
         super(ConvBlock, self).__init__()
@@ -115,10 +119,6 @@ class Head(nn.Module):
     def forward(self, x):
         x = x.view(-1, self.insize)
         return self.model(x)
-
-def print1(x):
-    # print(x)
-    pass
 
 class MultyLayer(nn.Module):
     def __init__(self, device, PCA_COUNT, conv_desc = None, head_desc = None, IMG_SIZE = (512, 512)):

@@ -190,7 +190,8 @@ def main():
                 average_loss = 1
                 median_loss = 1
 
-                next_seed = epoch + int(time.time())
+                next_seed = epoch
+                next_seed += int(time.time())
                 sampler.set_seed(next_seed) # new shuffle
                 dataloader_iterator = iter(dataloader)
 
