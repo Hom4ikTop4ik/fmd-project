@@ -11,6 +11,7 @@ from data_process import load
 from data_process.convertor_pca import MakerPCA, PCA_COUNT
 from detector.blocked import MultyLayer
 
+from data_process import BATCH_SIZE
 
 def gen_lim(limit, generator):
     for i, obj in enumerate(generator):
@@ -30,7 +31,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(time.time())
 print("devise is: ", device)
 if __name__ == "__main__":
-    dataLoader, sampler = load(64, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
+    dataLoader, sampler = load(BATCH_SIZE, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
 
     dataIterator = iter(dataLoader)
     print("AHAHHA")
@@ -44,9 +45,9 @@ if __name__ == "__main__":
     for i in range(int(input("cycles"))):
         new_data = gen_lim(1000, dataIterator)
         sampler.set_seed(i)
-        print("\t\t")
+        # print("\t\t")
         mypca = mypca.fit(new_data, PCA_COUNT, verbose=True)
     print("saving PCA...")
     mypca.save(os.path.join(current_path,'data_process/pcaweights_ext.pca'))
     print("BB!")
-    
+    print(time.time())

@@ -6,7 +6,7 @@ import joblib
 from sklearn.decomposition import PCA
 import time
 
-PCA_COUNT = 40
+PCA_COUNT = 16
 
 class MakerPCA():
     def __init__(self):

@@ -22,7 +22,11 @@ import tb.log_frog as log_frog
 DOTS = 72
 
 head_desc1 = [
+    ('linear', 512), 
+    ('linear', 384), 
+    ('linear', 256), 
     ('linear', 128), 
+    ('linear', 512), 
     ('linear', 64), 
     ('linear', PCA_COUNT)
 ]

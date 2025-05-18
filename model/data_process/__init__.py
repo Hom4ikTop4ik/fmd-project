@@ -5,7 +5,7 @@ from .utils import *
 from .convertor_pca import MakerPCA
 
 noise = 0.05
-rotate = 45
+rotate = 30
 min_scale = 0.8
 max_scale = 1.2
 blur_level = 7

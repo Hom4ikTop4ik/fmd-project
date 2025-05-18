@@ -142,8 +142,8 @@ class MultyLayer(nn.Module):
             ('batch',     128),
             ('convblock', 128, 256),            # 4 -> 2
             ('batch',     256),
-            ('convblock', 256, 256),            # 2 -> 1
-            ('batch',     256)
+            ('convblock', 256, 512),            # 2 -> 1
+            ('batch',     512)
         ]
         if conv_desc:
             self.conv_description = conv_desc
