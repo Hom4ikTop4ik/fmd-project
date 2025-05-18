@@ -130,14 +130,20 @@ def show_image_numpy(img_to_print):
     cv2.waitKey(0)
     return name
 
-def show_image_coords(img, coords):
+def show_image_coords(img, coords, print_i = False):
     name = "img" + str(random.randint(0, 1000))
     newimg = (img.cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
-
+    
     newimg = np.ascontiguousarray(newimg)
-    for coord in coords:
+    # newimg = cv2.resize(newimg, (1024, 1024))
+    h, w = newimg.shape[:2]
+
+    for i, coord in enumerate(coords):
         x, y = coord[0], coord[1]
-        newimg = cv2.circle(newimg, (int(x * newimg.shape[1]), int(y * newimg.shape[0])), 2, (255, 255, 255), 2)
+        px, py = int(x * w), int(y * h)
+        newimg = cv2.circle(newimg, (px, py), 2, (255, 255, 255), 2)
+        if (print_i):
+            cv2.putText(newimg, str(i), (px + 4, py - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1, cv2.LINE_AA)            
     
     cv2.imshow(name, newimg)
     cv2.waitKey(0)
@@ -588,7 +594,7 @@ def in_paint(img):
         img = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device) / 255.0  # H x W x C -> C x H x W и нормализация
     return img
 
-def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, blur_level=5):
+def augment_image(img : torch.Tensor, coords : torch.Tensor, rotate=0, noise=0.0, scale=1.0, blur_level=5):
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None
@@ -619,7 +625,6 @@ def augment_image(img : torch.Tensor, coords, rotate=0, noise=0.0, scale=1.0, bl
 
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device).item() * 2 - 1) * rotate  # От -rotate до +rotate
-    # angle = angle.item()
 
     img = F.rotate(img, angle, fill=fill_color)
     # Вращение координат

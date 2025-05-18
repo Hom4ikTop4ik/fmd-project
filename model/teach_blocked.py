@@ -20,6 +20,7 @@ from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA, NET, MODE
 import tb.log_frog as log_frog
 
 DOTS = 72
+LOG_IMAGES_OR_NO = -1 # 0 YES, less than 0 NO
 
 head_desc1 = [
     ('linear', 512), 
@@ -106,12 +107,12 @@ def look_predict(imgtens: torch.Tensor, predict: torch.Tensor, show_depth=DA):
     cv2.imshow("Prediction", newimg)
     cv2.waitKey(1000)
 
-def print_progress_bar(start_if_line: str, iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss):
+def print_progress_bar(start_if_line: str, iteration, total, epoch, epochs, iter_per_second, loss, average_loss, median_loss, timetime):
     percent = (iteration / total) * 100
     bar_length = 10
     block = int(round(2*bar_length * percent / 100))
     progress = '▓' * (block//2) + '▒' * (block%2) + '░' * (bar_length - block // 2 - block % 2)
-    sys.stdout.write(f'\r{start_if_line}[{progress}] {percent:3.0f}% (Epoch: {epoch}/{epochs}, Iteration: {iteration}/{total}, Iter/s: {iter_per_second:4.2f}, Loss: {loss:.4f}, Avg: {average_loss:.4f}, Med: {median_loss:.4f})')
+    sys.stdout.write(f'\r{start_if_line}[{progress}] {percent:3.0f}% (Epoch: {epoch}/{epochs}, Iter: {iteration}/{total}, Iter/s: {iter_per_second:4.2f}, Time: {timetime},Loss: {loss:.4f}, Avg: {average_loss:.4f}, Med: {median_loss:.4f})')
     sys.stdout.flush()
 
 
@@ -222,8 +223,9 @@ def main():
                     formatted_loss = log_frog.format_number(loss)
                     writer.add_scalar('loss', formatted_loss, global_iteration)
 
-                    if global_iteration % log_frog.LOG_IMAGES_EVERY == 0:
+                    if global_iteration % log_frog.LOG_IMAGES_EVERY == LOG_IMAGES_OR_NO:
                         with torch.no_grad():
+                            print("\rLOG FROG \t\t_\r")
                             pred_coords = mypca.decompress(ans).reshape(-1, 3, DOTS).permute(0, 2, 1)
                             target_coords = mypca.decompress(truth).reshape(-1, 3, DOTS).permute(0, 2, 1)
                             log_frog.log_images_to_tensorboard(writer, bt_images, pred_coords, target_coords, global_iteration)
@@ -250,7 +252,7 @@ def main():
                             average_loss = sum(iter_loss) / len(iter_loss)
                             median_loss = iter_loss[l // 2]
                         
-                        print_progress_bar("\t\t", iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss)
+                        print_progress_bar("\t\t", iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss, log_frog.format_number(time.time() - pupupu))
                     else:
                         print(f'\t\tloss {loss:.5f}, iteration: {iteration}')
             

@@ -96,6 +96,7 @@ def load(
     # 8 workers and prefetch=3 is about 3GB video memory
 
     num_workers = 8
+    # pin = not augments 
     pin = True # in start device is cpu, so memory_pin is avaiable
 
     # Используем prefetch_factor для предзагрузки данных

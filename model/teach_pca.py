@@ -31,14 +31,14 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(time.time())
 print("devise is: ", device)
 if __name__ == "__main__":
-    dataLoader, sampler = load(BATCH_SIZE, "./registry/dataset/train", "images", "extended_coords", device, sampler_seed=18)
+    dataLoader, sampler = load(BATCH_SIZE, "./model/registry/dataset/train", "images", "coords", device, sampler_seed=18)
 
     dataIterator = iter(dataLoader)
     print("AHAHHA")
 
     again = input("Train yet? (y/n)")
     mypca = MakerPCA()
-    if (again != "n"):
+    if (again == "y"):
         print("load")
         mypca.load(path=os.path.join(current_path, 'data_process/pcaweights_ext.pca'))
         

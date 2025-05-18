@@ -36,6 +36,7 @@ class MakerPCA():
 
     def load(self, path):
         self.pca = joblib.load(path)
+        print(self.pca)
         return self
 
     
@@ -60,26 +61,3 @@ class MakerPCA():
             tslist.append(torch.Tensor(coords[1].values.astype(float)))
         ts = torch.stack(tslist)
         return ts
-
-
-if __name__ == "__main__":
-    current_path = os.path.dirname(os.path.dirname(__file__))
-    registry_path = os.path.join(current_path, 'registry')
-    dataset = load(500, 40, os.path.join(current_path, registry_path, 'dataset'))
-    print('loaded')
-    convertor = MakerPCA().fit(dataset, PCA_COUNT, verbose=True)
-    print('fitted')
-    # convertor = MakerPCA().load('pcaweights.pca')
-    
-    coordbatch = dataset[0][1]
-    print('coordsbatch', coordbatch.shape)
-    start = time.time()
-    compressed = convertor.compress(coordbatch)
-    end = time.time()
-    print(f'compressed in {end - start:.3f} seconds: {compressed.shape}')
-    print(compressed)
-    start = time.time()
-    decompressed = convertor.decompress(compressed)
-    end = time.time()
-    print(f'decompressed in {end - start:.3f} seconds: {decompressed.shape}')
-    print(decompressed)
