@@ -24,8 +24,7 @@ ADDPOINTS_PATH = 'newPoints.txt'
 
 START_FRAME_ID = 27501
 
-SKIP_FIRST_FRAMES = 0
-frames_done = 0
+SKIP_FIRST_FRAMES = 205
 
 IMG_DIR = os.path.join(SAVE_DIR, "images")
 COORD_DIR = os.path.join(SAVE_DIR, "coords")
@@ -51,6 +50,7 @@ idmap = mappings.dlibToMeshMapping
 # === Обработка видео ===
 cap = cv2.VideoCapture(VIDEO_PATH)
 frame_id = START_FRAME_ID
+frames_done = 0
 
 print("Nakonec vsyo zagruzilos', let's start!")
 
@@ -62,17 +62,20 @@ while cap.isOpened():
         break
     
     if frames_done < SKIP_FIRST_FRAMES:
-        frame_id += 1
         frames_done += 1
+        print(f"[{frame_id}, {frames_done}] Skipped: user set SKIP_FIRST_FRAMES")
+        frame_id += 1
         continue
 
     dets = detector(frame, 1)
     if not dets:
-        frame_id += 1
         frames_done += 1
         print(f"[{frame_id}, {frames_done}] Skipped: face is not detected")
+        frame_id += 1
         continue
 
+    # по-хорошему, нужно отбрасывать кадры где несколько лиц, 
+    # но наши видео хороши — оставим обработку таких случаев на будущие коммиты
     for det in dets:
         face_rect = dlib.rectangle(int(det.rect.left()), int(det.rect.top()),
                                    int(det.rect.right()), int(det.rect.bottom()))
