@@ -49,6 +49,8 @@ idmap = mappings.dlibToMeshMapping
 cap = cv2.VideoCapture(VIDEO_PATH)
 frame_id = START_FRAME_ID
 
+print("Nakonec vsyo zagruzilos', let's start!")
+
 while cap.isOpened():
     start_time = time.time()
 
