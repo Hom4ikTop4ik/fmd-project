@@ -16,13 +16,16 @@ import depth_adding.coordsParser as coordsParser # ← парсер коорди
 DLIB_DOTS = 68
 TOTAL_DOTS = 72
 VIDEO_PATH = 'video.mp4'
-SAVE_DIR = 'output'
+SAVE_DIR = 'output2'
 MODEL_PATH = 'shape_predictor_68_face_landmarks.dat'
 FACE_DETECTOR_PATH = 'mmod_human_face_detector.dat'
 OBJ_MODEL_PATH = 'demoface.obj'
 ADDPOINTS_PATH = 'newPoints.txt'
 
-START_FRAME_ID = 27001
+START_FRAME_ID = 27501
+
+SKIP_FIRST_FRAMES = 0
+frames_done = 0
 
 IMG_DIR = os.path.join(SAVE_DIR, "images")
 COORD_DIR = os.path.join(SAVE_DIR, "coords")
@@ -57,10 +60,17 @@ while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
+    
+    if frames_done < SKIP_FIRST_FRAMES:
+        frame_id += 1
+        frames_done += 1
+        continue
 
     dets = detector(frame, 1)
     if not dets:
         frame_id += 1
+        frames_done += 1
+        print(f"[{frame_id}, {frames_done}] Skipped: face is not detected")
         continue
 
     for det in dets:
@@ -117,10 +127,11 @@ while cap.isOpened():
             for x, y, z in coords3d:
                 f.write(f"{x:.6f} {y:.6f} {z:.6f}\n")
 
-        print(f"[{frame_id}] Сохранено: {img_name} + {coord_name}")
-        print(f'{time.time() - start_time}')
+        print(f"[{frame_id}, {frames_done}] Сохранено: {img_name} + {coord_name}")
+        print(f'{time.time() - start_time: .4f}')
 
     frame_id += 1
+    frames_done += 1
 
 cap.release()
 print("Обработка завершена.")
