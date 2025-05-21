@@ -11,3 +11,6 @@ model/registry/**
 model/flame_pytorch/model/*
 **/__pycache__
 model/logs/*
+
+dataset_creation/create_coords_from_video/mmod_human_face_detector.dat
+dataset_creation/create_coords_from_video/shape_predictor_68_face_landmarks.dat
