@@ -7,7 +7,7 @@ import re
 from torch.utils.data import Dataset, DataLoader
 from data_process.__init__ import noise, rotate, min_scale, max_scale, blur_level
 from data_process.augments import augment_image, scale_img, show_image
-from data_process.__init__ import USE_CPU_WHATEVER, DA, NET, BATCH_SIZE
+from data_process.__init__ import USE_CPU_WHATEVER, DA, NET, BATCH_SIZE, POCHTI
 
 from torch.utils.data import Sampler
 import random
@@ -63,9 +63,9 @@ class CustomDataset(Dataset):
         coords_path = os.path.join(self.coords_dir, self.coords_files[idx])
         coords = torch.from_numpy(np.loadtxt(coords_path)).float()
 
-        if self.aug:
+        if self.aug  or  self.aug == POCHTI:
             scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
-            image, coords = augment_image(image, coords, rotate, noise, scale, blur_level)
+            image, coords = augment_image(image, coords, rotate, noise, scale, blur_level, self.aug)
 
         # image = image.to(self.device)
         # coords = coords.to(self.device)
@@ -84,24 +84,28 @@ def load(
         images_dir: str = 'images', 
         coords_dir: str = 'coords',
         device = 'cpu',
-        sampler_seed = 0
+        sampler_seed = 0,
+        augments = DA,
+        workers = DA
     ):
     images_dir_full = os.path.join(dataset_path, images_dir)
     coords_dir_full = os.path.join(dataset_path, coords_dir)
     
-    augments = DA
+    # augments = DA
     dataset = CustomDataset(images_dir_full, coords_dir_full, device, augments)
     sampler = EpochShuffleSampler(len(dataset), sampler_seed)
     
     # 8 workers and prefetch=3 is about 3GB video memory
 
     num_workers = 8
-    # pin = not augments 
+    if not workers:
+        num_workers = 0
+
     pin = True # in start device is cpu, so memory_pin is avaiable
 
     # Используем prefetch_factor для предзагрузки данных
     prefetch_factor = 2
-    if (prefetch_factor == 0) or (num_workers == 0):
+    if (prefetch_factor <= 0) or (num_workers <= 0):
         prefetch_factor = None
 
     dataloader = DataLoader(

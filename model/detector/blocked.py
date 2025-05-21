@@ -5,6 +5,73 @@ DA = True
 NET = False
 POFIG = NET
 
+CONV_BASE_1 = [
+    #         in_ch, out_ch, k, s, p
+    ('conv',      3, 3,      7, 2, 3),  # pulconv: 512 -> 256
+    ('convblock', 3, 6),                # 256 -> 128
+    ('batch',     6),
+    ('convblock', 6, 9),                # 128 -> 64
+    ('batch',     9),
+    ('convblock', 9, 16),               # 64 -> 32
+    ('batch',     16),
+    ('convblock', 16, 32),              # 32 -> 16
+    ('batch',     32),
+    ('convblock', 32, 64),              # 16 -> 8
+    ('batch',     64),
+    ('convblock', 64, 128),             # 8 -> 4
+    ('batch',     128),
+    ('convblock', 128, 256),            # 4 -> 2
+    ('batch',     256),
+    ('convblock', 256, 512),            # 2 -> 1
+    ('batch',     512)
+]
+
+# агрессивно достаём больше мелких деталей
+CONV_BASE_2 = [
+    #         in_ch, out_ch, k, s, p
+    ('conv',      3, 3,      7, 2, 3),  # pulconv: 512 -> 256
+    ('convblock', 3, 15),    # 256 -> 128
+    ('batch',     15),
+    ('convblock', 15, 48),   # 128 -> 64
+    ('batch',     48),
+    ('convblock', 48, 96),   # 64 -> 32
+    ('batch',     96),
+    ('convblock', 96, 128),  # 32 -> 16
+    ('batch',     128),
+    ('convblock', 128, 192), # 16 -> 8
+    ('batch',     192),
+    ('convblock', 192, 256), # 8 -> 4
+    ('batch',     256),
+    ('convblock', 256, 384), # 4 -> 2
+    ('batch',     384),
+    ('convblock', 384, 512), # 2 -> 1
+    ('batch',     512)
+]
+
+# полегче чем 2
+CONV_BASE_3 = [
+    #         in_ch, out_ch, k, s, p
+    ('conv',      3, 3,      7, 2, 3),  # pulconv: 512 -> 256
+    ('convblock', 3, 10),    # 256 -> 128
+    ('batch',     10),
+    ('convblock', 10, 32),   # 128 -> 64
+    ('batch',     32),
+    ('convblock', 32, 64),   # 64 -> 32
+    ('batch',     64),
+    ('convblock', 64, 128),  # 32 -> 16
+    ('batch',     128),
+    ('convblock', 128, 192), # 16 -> 8
+    ('batch',     192),
+    ('convblock', 192, 320), # 8 -> 4
+    ('batch',     320),
+    ('convblock', 320, 384), # 4 -> 2
+    ('batch',     384),
+    ('convblock', 384, 512), # 2 -> 1
+    ('batch',     512)
+]
+
+CONV_BASE = CONV_BASE_3
+
 def print1(x):
     # print(x)
     pass
@@ -121,32 +188,10 @@ class Head(nn.Module):
         return self.model(x)
 
 class MultyLayer(nn.Module):
-    def __init__(self, device, PCA_COUNT, conv_desc = None, head_desc = None, IMG_SIZE = (512, 512)):
+    def __init__(self, device, PCA_COUNT, conv_desc = CONV_BASE, head_desc = None, IMG_SIZE = (512, 512)):
         super(MultyLayer, self).__init__()
         
-        # base
-        self.conv_description = [
-            #         in_ch, out_ch, k, s, p
-            ('conv',      3, 3,      7, 2, 3),  # pulconv: 512 -> 256
-            ('convblock', 3, 6),                # 256 -> 128
-            ('batch',     6),
-            ('convblock', 6, 9),                # 128 -> 64
-            ('batch',     9),
-            ('convblock', 9, 16),               # 64 -> 32
-            ('batch',     16),
-            ('convblock', 16, 32),              # 32 -> 16
-            ('batch',     32),
-            ('convblock', 32, 64),              # 16 -> 8
-            ('batch',     64),
-            ('convblock', 64, 128),             # 8 -> 4
-            ('batch',     128),
-            ('convblock', 128, 256),            # 4 -> 2
-            ('batch',     256),
-            ('convblock', 256, 512),            # 2 -> 1
-            ('batch',     512)
-        ]
-        if conv_desc:
-            self.conv_description = conv_desc
+        self.conv_description = conv_desc
 
         # base
         self.head_description = [

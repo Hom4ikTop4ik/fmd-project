@@ -21,5 +21,6 @@ MODE = "train"
 
 DA = True
 NET = False
+POCHTI = "pochti"
 USE_CPU_WHATEVER = NET
 PROGRESS_BAR = DA

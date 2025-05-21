@@ -8,6 +8,11 @@ model/registry/**
 !model/registry/dataset/train/coords/
 !model/registry/dataset/train/coords/condcords00101_3d.txt
 
+model/data_process/pcaweights*
+!model/data_process/pcaweights_ext.pca
+
 model/flame_pytorch/model/*
 **/__pycache__
 model/logs/*
+
+obj_output_files/**

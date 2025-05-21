@@ -9,7 +9,11 @@ import os
 import sys
 from datetime import datetime
 
-__all__ = ['make_filter', 'scale_img', 'show_image', 'show_image_coords']
+DA = True
+NET = False
+POCHTI = "pochti"
+
+__all__ = ['make_filter', 'scale_img', 'show_image', 'show_image_coords', 'show_image_numpy']
 
 # inpaint дорисовывает углы на основе картинки
 # mean заполняет средним цветом картинки (такое себе)
@@ -239,7 +243,14 @@ def get_eye_centers(landmarks_px):
 
 
 
-def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor, fill_color = (0,0,0)) -> tuple[torch.Tensor, torch.Tensor]:
+def shift_image_coords(
+        image_tensor: torch.Tensor, 
+        coords_tensor: torch.Tensor, 
+        fill_color = (0,0,0), aug = DA
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+
+    image_shifted = image_tensor.clone()
+
     C, H, W = image_tensor.shape
 
     shift_x = torch.empty(1).uniform_(SHIFT_LEFT_COEF, SHIFT_RIGHT_COEF).item()
@@ -259,15 +270,16 @@ def shift_image_coords(image_tensor: torch.Tensor, coords_tensor: torch.Tensor, 
     dst_y_start = max(0, shift_px_y)
     dst_y_end = min(H, H + shift_px_y)
     
-    # Создаём пустой холст
-    image_shifted = torch.zeros_like(image_tensor)
-    (r,g,b) = fill_color
-    image_shifted[0, :, :] = r
-    image_shifted[1, :, :] = g
-    image_shifted[2, :, :] = b
+    if aug != POCHTI:
+        # Создаём пустой холст
+        image_shifted = torch.zeros_like(image_tensor)
+        (r,g,b) = fill_color
+        image_shifted[0, :, :] = r
+        image_shifted[1, :, :] = g
+        image_shifted[2, :, :] = b
     
-    # Копируем содержимое
-    image_shifted[:, dst_y_start:dst_y_end, dst_x_start:dst_x_end] = image_tensor[:, src_y_start:src_y_end, src_x_start:src_x_end]
+        # Копируем содержимое
+        image_shifted[:, dst_y_start:dst_y_end, dst_x_start:dst_x_end] = image_tensor[:, src_y_start:src_y_end, src_x_start:src_x_end]
 
     coords_shifted = coords_tensor.clone()
     for i in range(coords_tensor.shape[0]):
@@ -486,7 +498,7 @@ def scale_img(img, scale, mode = 'bilinear'):
     
     return scale
 
-def scaler(img_torch : torch.Tensor, coords_torch : torch.Tensor, scale : float = 1.0):
+def scaler(img_torch : torch.Tensor, coords_torch : torch.Tensor, scale : float = 1.0, aug = DA):
     img = img_torch.clone()
     coords = coords_torch.clone()
 
@@ -498,14 +510,17 @@ def scaler(img_torch : torch.Tensor, coords_torch : torch.Tensor, scale : float 
         small_y = int(y * scale)
 
         if (x > small_x):
-            down_scale_img = scale_img(img, scale, mode = interpolate_mode)
+            if aug != POCHTI:
+                down_scale_img = scale_img(img, scale, mode = interpolate_mode)
 
             cornerx = torch.randint(0, x - small_x, (1,), device=img.device).item()
             cornery = torch.randint(0, y - small_y, (1,), device=img.device).item()
 
-            background = torch.zeros_like(img)
-            background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
-            img = background
+            if aug != POCHTI:
+                background = torch.zeros_like(img)
+                background[:, cornery:cornery + small_y, cornerx:cornerx + small_x] = down_scale_img
+                img = background
+            
             prevsize = (x, y)
             coords = crop_coords_small(coords, cornerx, cornerx + small_x, cornery, cornery + small_y, prevsize)
     elif (scale > 1.0):
@@ -514,13 +529,17 @@ def scaler(img_torch : torch.Tensor, coords_torch : torch.Tensor, scale : float 
         big_x = int(x * scale)
         big_y = int(y * scale)
         if (big_x > x):
-            up_scale_img = scale_img(img, scale, mode = interpolate_mode)
+            if aug != POCHTI:
+                up_scale_img = scale_img(img, scale, mode = interpolate_mode)
 
             # Обрезка до исходного размера
             cornerx = torch.randint(0, big_x - x, (1,), device=img.device).item()
             cornery = torch.randint(0, big_y - y, (1,), device=img.device).item()
-            img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
-            img = img_cropped
+
+            if aug != POCHTI:
+                img_cropped = up_scale_img[:, cornery:cornery + y, cornerx:cornerx + x]
+                img = img_cropped
+            
             prevsize = (big_x, big_y)
             coords = crop_coords_big(coords, cornerx, cornerx + x, cornery, cornery + y, prevsize)
     
@@ -594,7 +613,7 @@ def in_paint(img):
         img = torch.from_numpy(inpainted_img).permute(2, 0, 1).float().to(img.device) / 255.0  # H x W x C -> C x H x W и нормализация
     return img
 
-def augment_image(img : torch.Tensor, coords : torch.Tensor, rotate=0, noise=0.0, scale=1.0, blur_level=5):
+def augment_image(img : torch.Tensor, coords : torch.Tensor, rotate=0, noise=0.0, scale=1.0, blur_level=5, aug = DA):
     if img.shape[1] != img.shape[2]:
         print("Image is not square!")
         return None, None
@@ -605,15 +624,16 @@ def augment_image(img : torch.Tensor, coords : torch.Tensor, rotate=0, noise=0.0
     # sys.exit()
     
     # img = add_glasses_opencv(img, coords, glasses_directory, glasses_probability)
-    img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
-    img = add_gaussian_blur(img, blur_level)
-    img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
+    if aug != POCHTI:
+        img = add_colored_shapes(img, colored_shape_cover_ratio, colored_shape_use)
+        img = add_gaussian_blur(img, blur_level)
+        img = simulate_ISO(img, mode="gamma", noise_strength = 0.05)
 
 
     if angleFiller == "MEAN":
         mean_color = img.mean(dim=[1, 2])
 
-    img, coords = scaler(img, coords, scale)
+    img, coords = scaler(img, coords, scale, aug=aug)
 
     # Заполнение чёрных углов и контуров цветом
     fill_color = None
@@ -626,18 +646,20 @@ def augment_image(img : torch.Tensor, coords : torch.Tensor, rotate=0, noise=0.0
     # Генерация случайного угла вращения
     angle = (torch.rand(1, device=img.device).item() * 2 - 1) * rotate  # От -rotate до +rotate
 
-    img = F.rotate(img, angle, fill=fill_color)
+    if aug != POCHTI:
+        img = F.rotate(img, angle, fill=fill_color)
     # Вращение координат
     coords = rotate_coords(coords, angle)
 
-    img, coords = shift_image_coords(img, coords, fill_color)
+    img, coords = shift_image_coords(img, coords, fill_color, aug = aug)
 
-    if angleFiller == "INPAINT":
-        img = in_paint(img) # instead of mean color
+    if aug != POCHTI:
+        if angleFiller == "INPAINT":
+            img = in_paint(img) # instead of mean color
 
-    # Добавление шума
-    if noise > 0:
-        img = noise_tensor(img, noise)
+        # Добавление шума
+        if noise > 0:
+            img = noise_tensor(img, noise)
 
     return img, coords
 

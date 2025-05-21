@@ -6,21 +6,22 @@ import torch
 import torch.nn as nn
 import numpy as np
 import time
-
 from datetime import datetime
 
-
-from data_process.convertor_pca import MakerPCA, PCA_COUNT
+from data_process.convertor_pca import MakerPCA, PCA_COUNT, VERSION
 from detector.blocked import MultyLayer
 
-from data_process import make_filter, scale_img
+from data_process import make_filter, scale_img, show_image_coords
 from data_process import load, noise, rotate, min_scale, max_scale, epochs, BATCH_SIZE, total_iterations, iter_k
 from data_process import PROGRESS_BAR, USE_CPU_WHATEVER, DA, NET, MODE
 
 import tb.log_frog as log_frog
 
 DOTS = 72
-LOG_IMAGES_OR_NO = -1 # 0 YES, less than 0 NO
+LOG_IMAGES_OR_NO = -1 # 0 -> YES; less than 0 -> NO, because if (smth1 % smth2 == -1) is never
+DEBUG = NET
+
+AUG = DA
 
 head_desc1 = [
     ('linear', 512), 
@@ -74,14 +75,14 @@ def model_test(look=NET):
             ans = model(bt_images)
 
             current_loss = criterion(ans, truth)
-            loss += current_loss # delete log_frog.format_number() chtobi poter menshe bilo
+            loss += current_loss
             iteration += 1
 
             if look:
                 for i in range(BATCH_SIZE):
                     ans_i = ans[i:i+1].to("cpu")
                     dec = mypca.decompress(ans_i)
-                    PCA2coords = dec.reshape(-1, 3, DOTS).permute(0, 2, 1)
+                    PCA2coords = dec
                     look_predict(bt_images[i], PCA2coords)
         
         avg_loss = log_frog.format_number(loss / iteration)
@@ -122,7 +123,11 @@ signal.signal(signal.SIGINT, passer)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_dir, 'registry')
-weight_save_path = os.path.join(registry_path, 'weights', 'model_bns.pth')
+if VERSION == "NEW":
+    last_weigth_path_part = 'model_bns_GROUPS_3.pth'
+elif VERSION == "OLD":
+    last_weigth_path_part = 'model_bns_16PCA_60_epochs.pth'
+weight_save_path = os.path.join(registry_path, 'weights', last_weigth_path_part)
 
 def main():
     global dataloader, device, model, optimizer, criterion, coordfilter, mypca, writer, global_iteration
@@ -147,6 +152,13 @@ def main():
         model.load_state_dict(torch.load(weight_save_path))
         # model.load_state_dict(torch.load(weight_save_path, map_location = device))
 
+    mypca = MakerPCA()
+    # if input('Load PCA weigths from its weight save path? (y/n) ') in 'yYнН':
+    if VERSION == "NEW":
+        last_PCA_path_part = 'pcaweights_ext_GROUPS_3.pca'
+    elif VERSION == "OLD":
+        last_PCA_path_part = 'pcaweights_16PCA.pca'
+    mypca.load(os.path.join(current_dir, 'data_process', last_PCA_path_part))
 
     print("Loading DataLoader...")
     start_loading_dataloader = time.time()
@@ -155,10 +167,12 @@ def main():
         dataset_path=os.path.join(current_dir, registry_path, 'dataset', 'train'),
         device=device,
         coords_dir="coords",
-        sampler_seed=int(time.time())
+        sampler_seed=int(time.time()),
+        augments=AUG,
+        workers=DA
     )
 
-    signal.signal(signal.SIGINT, interactor) # I WANT CLOSE PROGRAM
+    signal.signal(signal.SIGINT, interactor) # Now I want stop program and ask user "save/exit?"
     
     # launch workers
     next(iter(dataloader))
@@ -167,9 +181,6 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), 0.001, betas=(0.9, 0.95))
     criterion = nn.MSELoss().to(device)
     coordfilter = make_filter(53, 36, 62, 13, 14, 30, 44)
-
-    mypca = MakerPCA()
-    mypca.load(os.path.join(current_dir, 'data_process', 'pcaweights_ext.pca'))
 
     global_iteration = 0
     start_time = time.time()
@@ -212,6 +223,16 @@ def main():
                     # Training code
                     truth = mypca.compress(bt_coords).to(device)
                     
+                    if DEBUG:
+                        decompress_for_debug = mypca.decompress(truth).to(device)
+                        show_image_coords(bt_images[0], decompress_for_debug[0])
+                        show_image_coords(bt_images[0], bt_coords[0])
+                        # show_image_coords(bt_images[1], decompress_for_debug[1])
+                        # show_image_coords(bt_images[2], decompress_for_debug[2])
+                        # show_image_coords(bt_images[3], decompress_for_debug[3])
+                        sys.exit()
+                    
+                    
                     ans = model(bt_images)
                     loss = criterion(ans, truth)
                     optimizer.zero_grad()
@@ -225,9 +246,9 @@ def main():
 
                     if global_iteration % log_frog.LOG_IMAGES_EVERY == LOG_IMAGES_OR_NO:
                         with torch.no_grad():
-                            print("\rLOG FROG \t\t_\r")
-                            pred_coords = mypca.decompress(ans).reshape(-1, 3, DOTS).permute(0, 2, 1)
-                            target_coords = mypca.decompress(truth).reshape(-1, 3, DOTS).permute(0, 2, 1)
+                            print("\n\rLOG FROG \t\t_\r\n")
+                            pred_coords = mypca.decompress(ans)#.reshape(-1, 3, DOTS).permute(0, 2, 1)
+                            target_coords = mypca.decompress(truth)#.reshape(-1, 3, DOTS).permute(0, 2, 1)
                             log_frog.log_images_to_tensorboard(writer, bt_images, pred_coords, target_coords, global_iteration)
                 
                     global_iteration += 1
@@ -255,13 +276,18 @@ def main():
                         print_progress_bar("\t\t", iteration, total_iterations, epoch + 1, epochs, iter_per_second, loss, average_loss, median_loss, log_frog.format_number(time.time() - pupupu))
                     else:
                         print(f'\t\tloss {loss:.5f}, iteration: {iteration}')
-            
+
+                backup_path = weight_save_path + f'{time.time()}'
+                print(f'\nbackup in {backup_path}')
+                torch.save(model.state_dict(), backup_path)
+
                 print(f"\n\t\tEpoch {epoch+1} completed. Avg loss: {log_frog.format_number(epoch_loss/total_iterations)}\n")
 
                 # # NO, PLEASE, NO. IT WILL START TEST ALL DATASET 💀 (about 20k images!)      
                 # if epoch % 2 == 0:
                 #     print("Let's start model_test(look=DA)!")
                 #     model_test(look=DA)
+            #end for epochs
         
             # Save after all iterations
             if (input("\nDo you wanna save weigths? (y/n) ")[0] in 'yYнН'):
