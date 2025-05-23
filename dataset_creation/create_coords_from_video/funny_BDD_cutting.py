@@ -25,14 +25,14 @@ IMAGE_SCALE_FOR_DLIB = 0.5 # 256 / 512
 DLIB_DOTS = 68
 TOTAL_DOTS = 72
 VIDEO_PATH = 'video.mp4'
-IMAGES_PATH = 'input_images_4/4_4'
-SAVE_DIR = 'output_4_4'
+IMAGES_PATH = 'input_images_1/1_1'
+SAVE_DIR = 'output_1_1'
 MODEL_PATH = 'shape_predictor_68_face_landmarks.dat'
 FACE_DETECTOR_PATH = 'mmod_human_face_detector.dat'
 OBJ_MODEL_PATH = 'demoface.obj'
 ADDPOINTS_PATH = 'newPoints.txt'
 
-START_FRAME_ID = 3751
+START_FRAME_ID = 1
 
 SKIP_FIRST_FRAMES = 0
 
@@ -64,6 +64,7 @@ frames_done = 0
 
 
 def process_frame(frame: npt.NDArray[np.uint8], frame_id: int, scale : float = 1.0) -> None:
+    img_orig = frame.copy()
     if scale != 1.0:
         frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
 
@@ -111,7 +112,7 @@ def process_frame(frame: npt.NDArray[np.uint8], frame_id: int, scale : float = 1
         img_name = os.path.join(IMG_DIR, f"dataimg{frame_id}.jpg")
         coord_name = os.path.join(COORD_DIR, f"condcords{frame_id}_3d.txt")
 
-        cv2.imwrite(img_name, frame)
+        cv2.imwrite(img_name, img_orig)
 
         with open(coord_name, "w") as f:
             for x, y, z in coords3d:
