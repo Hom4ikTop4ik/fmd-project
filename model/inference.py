@@ -118,7 +118,7 @@ def test(videopath, outpath, verbose = False):
     current_path = os.path.dirname(os.path.abspath(__file__))
     registry_path = os.path.join(current_path, 'registry')
     if VERSION == "NEW":
-        file_weight_name = 'model_bns_GROUPS_3.pth'
+        file_weight_name = 'model_blocked__bigCONV__PCA_LIST_0.pth'
     elif VERSION == "OLD":
         file_weight_name = 'model_bns_16PCA_60_epochs.pth'
     weight_load_path = os.path.join(registry_path, 'weights', file_weight_name)
@@ -128,7 +128,7 @@ def test(videopath, outpath, verbose = False):
     
     mypca = MakerPCA()
     if VERSION == "NEW":
-        file_PCA_name = 'pcaweights_ext_GROUPS_3.pca'
+        file_PCA_name = 'pcaweights_ext_LIST_0.pca'
     elif VERSION == "OLD":
         file_PCA_name = 'pcaweights_16PCA.pca'
 
@@ -167,8 +167,7 @@ def test(videopath, outpath, verbose = False):
         except Exception as e:
             break
 
-
-        # frame = shrink_and_center(frame, 1.4)
+        # frame = shrink_and_center(frame, 1.2)
         frame = torch.from_numpy(frame.astype(np.float32)).to(device) / 255
         if videopath == "camera":
             imgtens = frame[0:512, 0+85:512+85, :].permute(2, 0, 1).unsqueeze(0) # cut porovnu from left and right sides
@@ -222,6 +221,8 @@ if __name__ == '__main__':
     parser.add_argument("outpath", type=str, help="path to the output folder where obj sequence will be placed")
 
     args = parser.parse_args()
+
+    os.makedirs(args.outpath, exist_ok=True)  
 
     start_time = time.time()
     test(args.videopath, args.outpath)

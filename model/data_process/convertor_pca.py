@@ -7,6 +7,8 @@ from sklearn.decomposition import PCA
 
 VERSION = "NEW"
 
+CAN_TRAIN_MORE = True
+
 # [from, to] включительно
 # PCA_COUNT = sum(PCi_COUNT)
 # (from, to, PCi_COUNT)
@@ -60,8 +62,84 @@ PCA_LIST_4 = [
     (68, 71, 6)
 ]
 
-PCA_LIST = PCA_LIST_3
-PCA_COUNT = sum([PCi_count for (_, _, PCi_count) in PCA_LIST])
+PCA_LIST_LIST_0 = [
+    # 0
+    (range(0, 16+1), 8), # челюсть
+
+    # 1. 2
+    (range(17, 21+1), 6), # left brov'
+    (range(22, 26+1), 6), # right brov' 
+
+    # 3. 4
+    (range(27, 30+1), 6), # nose_vertical
+    (range(31, 35+1), 6), # nose_horizontal
+    
+    # 5. 6. 7. 8
+    ([39, 38, 37], 4), # left eye up
+    ([36, 41, 40], 4), # left eye down
+    ([42, 43, 44], 4), # right eye up
+    ([45, 46, 47], 4), # right eye down
+
+    # 9. 10. 11
+    # (range(48, 59+1), 6), # mouth 1
+    # (range(60, 67+1), 6), # mouth 2
+    ([48, 54, 60, 64], 6), # уголки рта, оранжевое
+    ([49, 50, 51, 52, 53, 61, 62, 63], 6), # верхняя часть рта
+    ([55, 56, 57, 58, 59, 65, 66, 67], 6), # нижняя часть рта
+    
+    # 12
+    (range(68, 71+1), 6) # 4 added points
+]
+
+# 6 много для вертикали носа
+PCA_LIST_LIST_1 = [
+    # 0
+    (range(0, 16+1), 8), # челюсть
+
+    # 1. 2
+    (range(17, 21+1), 6), # left brov'
+    (range(22, 26+1), 6), # right brov' 
+
+    # 3. 4
+    (range(27, 30+1), 4), # nose_vertical
+    (range(31, 35+1), 6), # nose_horizontal
+    
+    # 5. 6. 7
+    ([36, 39], 4), # left eye corners
+    ([37, 38], 4), # left eye up
+    ([40, 41], 4), # left eye down
+    
+    # 8. 9. 10
+    ([42, 45], 4), # right eye corners
+    ([43, 44], 4), # right eye up
+    ([46, 47], 4), # right eye down
+
+    # 11. 12. 13
+    # (range(48, 59+1), 6), # mouth 1
+    # (range(60, 67+1), 6), # mouth 2
+    ([48, 54, 60, 64], 6), # уголки рта, оранжевое
+    ([49, 50, 51, 52, 53, 61, 62, 63], 6), # верхняя часть рта
+    ([55, 56, 57, 58, 59, 65, 66, 67], 6), # нижняя часть рта
+    
+    # 14
+    (range(68, 71+1), 6) # 4 added points
+]
+
+PCA_LIST = PCA_LIST_LIST_1
+
+PERESTANOVKA = [] # хороший анекдот
+for i, _ in PCA_LIST:
+    PERESTANOVKA += i
+
+def permute(our_decompressed_points : torch.Tensor):
+    true = our_decompressed_points.clone()
+    idx = 0
+    for true_idx in PERESTANOVKA:
+        true[true_idx] = our_decompressed_points[idx]
+        idx += 1
+    return true
+
+PCA_COUNT = sum([PCi_count for (_, PCi_count) in PCA_LIST])
 
 # class MakerMultyPCA:
 class MakerPCA:
@@ -69,12 +147,12 @@ class MakerPCA:
         """
         pca_list: список троек (from_idx, to_idx, n_components) включительно
         """
-        print("\t__init__ PCA: ahahahahahahah")
+        print("\t__init__ PCA")
         self.pca_list = pca_list
-        self.pcas = []
+        self.pcas = [PCA(n_components=n_comp) for _, n_comp in self.pca_list]
     
     def _check_initialized(self):
-        if not self.pcas or any(pca is None for pca in self.pcas):
+        if (not self.pcas) or any(pca is None for pca in self.pcas):
             raise RuntimeError("GroupedPCA: PCA-модели не обучены или не загружены. Сначала вызовите fit() или load().")
 
     def fit(self, dataset, verbose=False):
@@ -87,19 +165,23 @@ class MakerPCA:
         for _, coords_batch in dataset:
             for coords in coords_batch:  # coords: (72, 3)
                 coords_np = coords.cpu().numpy()  # shape: (72, 3)
-                for i, (start, end, _) in enumerate(self.pca_list):
-                    group = coords_np[start:end+1].reshape(-1)  # (count*3,)
+                for i, (indices, _) in enumerate(self.pca_list):
+                    group = coords_np[indices].reshape(-1)  # (count*3,)
                     groups_data[i].append(group)
 
-        self.pcas = []
-        for i, (_, _, n_comp) in enumerate(self.pca_list):
-            pca = PCA(n_components=n_comp)
-            pca.fit(np.stack(groups_data[i], axis=0))  # shape: (N, group_len*3)
-            self.pcas.append(pca)
-
+        for i, (_, _) in enumerate(self.pca_list):
+            if not CAN_TRAIN_MORE:
+                if self.is_fitted(self.pcas[i]):
+                    if verbose:
+                        print(f"PCA group {i} already fitted, skipping")
+                    continue
+            
+            pca = self.pcas[i]
+            data = np.stack(groups_data[i], axis=0)
+            pca.fit(data)
             if verbose:
                 evr = pca.explained_variance_ratio_.sum()
-                print(f'Group {i}: [{self.pca_list[i][0]}:{self.pca_list[i][1]}] -> {n_comp} components, explained variance = {evr:.4f}')
+                print(f'Group {i}: [{self.pca_list[i][0]}:{self.pca_list[i][1]}] -> {pca.n_components_} components, explained variance = {evr:.4f}')
 
         return self
 
@@ -114,8 +196,8 @@ class MakerPCA:
         for coords in coords_batch:  # (72, 3)
             coords_np = coords.cpu().numpy()
             compressed = []
-            for (start, end, _), pca in zip(self.pca_list, self.pcas):
-                group = coords_np[start:end+1].reshape(1, -1)  # (1, count*3)
+            for (indices, _), pca in zip(self.pca_list, self.pcas):
+                group = coords_np[indices].reshape(1, -1)  # (1, count*3)
                 comp = pca.transform(group)[0]  # (n_components,)
                 compressed.append(torch.tensor(comp, dtype=torch.float32))
             batch_out.append(torch.cat(compressed))
@@ -132,15 +214,20 @@ class MakerPCA:
         for row in compressed_batch:  # (sum(n_components),)
             pointer = 0
             points = []
-            for (start, end, n_comp), pca in zip(self.pca_list, self.pcas):
-                group_len = (end - start + 1) * 3
-                part = row[pointer:pointer+n_comp].detach().cpu().numpy().reshape(1, -1)
+            
+            for (_, n_comp), pca in zip(self.pca_list, self.pcas):
+                part = row[pointer : pointer+n_comp].detach().cpu().numpy().reshape(1, -1)
+
                 restored = pca.inverse_transform(part)[0]  # shape: (group_len,)
                 pts = torch.tensor(restored, dtype=torch.float32).view(-1, 3)  # (count, 3)
+
                 points.append(pts)
                 pointer += n_comp
+
+
             coords = torch.cat(points, dim=0)  # (72, 3)
-            output.append(coords)
+            true_coords = permute(coords)
+            output.append(true_coords)
         return torch.stack(output)
 
     def save(self, path):

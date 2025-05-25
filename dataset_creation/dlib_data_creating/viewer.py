@@ -32,7 +32,7 @@ def showImageWithLandmarks(image, landmarks, putText):
     lenLandmarks = len(landmarks);
     for i in range(lenLandmarks):
         if (i == colors[colorCounter + 1]):
-        	colorCounter += 1;
+            colorCounter += 1;
         curH = colorCounter / colorLen;
 
         (x, y) = landmarks[i];
@@ -53,11 +53,11 @@ def showImageWithLandmarks(image, landmarks, putText):
 def processImages(imagePath, coordsPath):
     # Получение списка изображений
     try:
-    	imageNames = [f for f in os.listdir(imagePath) if os.path.isfile(os.path.join(imagePath, f))];
+        imageNames = [f for f in os.listdir(imagePath) if os.path.isfile(os.path.join(imagePath, f))];
     except Exception as e:
-    	print(e);
-    	print("Use console or terminal from script directory. Press Enter to close.");
-    	input();
+        print(e);
+        print("Use console or terminal from script directory. Press Enter to close.");
+        input();
 
     currentIndex = 0;
     numImages = len(imageNames);

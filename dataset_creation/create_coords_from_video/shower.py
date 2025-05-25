@@ -62,7 +62,9 @@ def draw_3d_points(image_path, coord_path, SCALE=[1.0, 1.0, 1.0, 1.0]):
 
 # === Пример использования ===
 if __name__ == "__main__":
-    num = 27001
-    image_path = f"output/images/dataimg{num}.jpg"
-    coord_path = f"output/coords/condcords{num}_3d.txt"
-    draw_3d_points(image_path, coord_path, [1.0, 0.5, 0.62, 0.62])
+    num = 27269
+    image_path = f"output_1_1/images/dataimg{num}.jpg"
+    coord_path = f"output_1_1/coords/condcords{num}_3d.txt"
+    image_path = f"I:/fmd-project/model/registry/dataset/train/images_Liliput/dataimg{num}.jpg"
+    coord_path = f"I:/fmd-project/model/registry/dataset/train/coords_Liliput/condcords{num}_3d.txt"
+    draw_3d_points(image_path, coord_path, [2.0, 1, 0, 0])

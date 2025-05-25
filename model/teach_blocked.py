@@ -124,7 +124,7 @@ signal.signal(signal.SIGINT, passer)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 registry_path = os.path.join(current_dir, 'registry')
 if VERSION == "NEW":
-    last_weigth_path_part = 'model_bns_GROUPS_3.pth'
+    last_weigth_path_part = 'model_blocked__bigCONV__PCA_LIST_0.pth'
 elif VERSION == "OLD":
     last_weigth_path_part = 'model_bns_16PCA_60_epochs.pth'
 weight_save_path = os.path.join(registry_path, 'weights', last_weigth_path_part)
@@ -155,9 +155,9 @@ def main():
     mypca = MakerPCA()
     # if input('Load PCA weigths from its weight save path? (y/n) ') in 'yYнН':
     if VERSION == "NEW":
-        last_PCA_path_part = 'pcaweights_ext_GROUPS_3.pca'
+        last_PCA_path_part = 'pcaweights_ext_LIST_0.pca'
     elif VERSION == "OLD":
-        last_PCA_path_part = 'pcaweights_16PCA.pca'
+        last_PCA_path_part = 'pca_old/pcaweights_16PCA.pca'
     mypca.load(os.path.join(current_dir, 'data_process', last_PCA_path_part))
 
     print("Loading DataLoader...")
@@ -225,8 +225,8 @@ def main():
                     
                     if DEBUG:
                         decompress_for_debug = mypca.decompress(truth).to(device)
-                        show_image_coords(bt_images[0], decompress_for_debug[0])
-                        show_image_coords(bt_images[0], bt_coords[0])
+                        show_image_coords(bt_images[0], decompress_for_debug[0], True, 2)
+                        show_image_coords(bt_images[0], bt_coords[0], True, 2)
                         # show_image_coords(bt_images[1], decompress_for_debug[1])
                         # show_image_coords(bt_images[2], decompress_for_debug[2])
                         # show_image_coords(bt_images[3], decompress_for_debug[3])

@@ -1,15 +1,10 @@
 model/registry/**
 !model/registry/weights/
-!model/registry/weights/model_bns.pth
-!model/registry/dataset/
-!model/registry/dataset/train/
-!model/registry/dataset/train/images/
-!model/registry/dataset/train/images/dataimg00101.jpeg
-!model/registry/dataset/train/coords/
-!model/registry/dataset/train/coords/condcords00101_3d.txt
+!model/registry/weights/model_blocked__bigCONV__PCA_LIST_0.pth
 
 model/data_process/pcaweights*
-!model/data_process/pcaweights_ext.pca
+!model/data_process/pcaweights_ext_LIST_0.pca
+model/data_process/pca_old
 
 model/flame_pytorch/model/*
 **/__pycache__

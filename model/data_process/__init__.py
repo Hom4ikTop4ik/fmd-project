@@ -10,12 +10,12 @@ min_scale = 0.8
 max_scale = 1.2
 blur_level = 7
 
-epochs = 50
+epochs = 500
 BATCH_SIZE = 64
-imgs_count = 20000
+imgs_count = 31455
 total_iterations = imgs_count // BATCH_SIZE
 
-iter_k = 20
+iter_k = 200
 
 MODE = "train"
 

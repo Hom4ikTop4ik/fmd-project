@@ -18,21 +18,23 @@ import depth_adding.coordsParser as coordsParser # ← парсер коорди
 # === Настройки ===
 IMAGES = "images"
 VIDEO = "video"
-CHOOSE = IMAGES
+MODE = IMAGES
+
+ONLY_IMG_RESIZE = False
 
 IMAGE_SCALE_FOR_DLIB = 0.5 # 256 / 512
 
 DLIB_DOTS = 68
 TOTAL_DOTS = 72
 VIDEO_PATH = 'video.mp4'
-IMAGES_PATH = 'input_images_1/1_1'
-SAVE_DIR = 'output_1_1'
+IMAGES_PATH = 'input_images_3/3_4'
+SAVE_DIR = 'output_3_4'
 MODEL_PATH = 'shape_predictor_68_face_landmarks.dat'
 FACE_DETECTOR_PATH = 'mmod_human_face_detector.dat'
 OBJ_MODEL_PATH = 'demoface.obj'
 ADDPOINTS_PATH = 'newPoints.txt'
 
-START_FRAME_ID = 1
+START_FRAME_ID = 13751
 
 SKIP_FIRST_FRAMES = 0
 
@@ -43,9 +45,11 @@ os.makedirs(IMG_DIR, exist_ok=True)
 os.makedirs(COORD_DIR, exist_ok=True)
 
 # === Инициализация ===
-detector = dlib.cnn_face_detection_model_v1(FACE_DETECTOR_PATH)
-predictor = dlib.shape_predictor(MODEL_PATH)
-face = Wavefront(OBJ_MODEL_PATH)
+if not ONLY_IMG_RESIZE:
+    predictor = dlib.shape_predictor(MODEL_PATH)
+    detector = dlib.cnn_face_detection_model_v1(FACE_DETECTOR_PATH)
+    face = Wavefront(OBJ_MODEL_PATH)
+
 adlist = []
 
 def get_add_list(filename: str):
@@ -57,16 +61,15 @@ def get_add_list(filename: str):
 adlist = get_add_list(ADDPOINTS_PATH)
 idmap = mappings.dlibToMeshMapping
 
-# === Обработка видео ===
-cap = cv2.VideoCapture(VIDEO_PATH)
-frame_id = START_FRAME_ID
-frames_done = 0
-
-
 def process_frame(frame: npt.NDArray[np.uint8], frame_id: int, scale : float = 1.0) -> None:
     img_orig = frame.copy()
     if scale != 1.0:
         frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+
+    if ONLY_IMG_RESIZE:
+        img_name = os.path.join(IMG_DIR, f"dataimg{frame_id}.jpg")
+        cv2.imwrite(img_name, img_orig)
+        return True
 
     dets = detector(frame, 1)
     if not dets:
@@ -130,7 +133,7 @@ frame_id = START_FRAME_ID
 frames_done = 0
 
 # --- Обработка видео ---
-if CHOOSE == VIDEO:
+if MODE == VIDEO:
     cap = cv2.VideoCapture(VIDEO_PATH)
     while cap.isOpened():
         start_time = time.time()
@@ -155,7 +158,7 @@ if CHOOSE == VIDEO:
     cap.release()
 
 # --- Обработка изображений ---
-if CHOOSE == IMAGES:
+if MODE == IMAGES:
     # получаем список файлов изображений (расширения можно добавить)
     valid_ext = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp'}
     img_files = [f for f in os.listdir(IMAGES_PATH) if os.path.splitext(f)[1].lower() in valid_ext]

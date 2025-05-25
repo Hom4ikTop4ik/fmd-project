@@ -53,7 +53,7 @@ LINEAR_ISO_B_TO = 0.05
 
 # gamma and offset
 LINEAR_ISO_G_FROM = 1
-LINEAR_ISO_G_TO = 5
+LINEAR_ISO_G_TO = 1.1#5
 LINEAR_ISO_O_FROM = -0.05
 LINEAR_ISO_O_TO = 0.05
 
@@ -134,12 +134,15 @@ def show_image_numpy(img_to_print):
     cv2.waitKey(0)
     return name
 
-def show_image_coords(img, coords, print_i = False):
+def show_image_coords(img, coords, print_i = False, scale : float = 1.0):
     name = "img" + str(random.randint(0, 1000))
     newimg = (img.cpu().numpy().transpose(1,2,0) * 255).astype(np.uint8)
     
     newimg = np.ascontiguousarray(newimg)
-    # newimg = cv2.resize(newimg, (1024, 1024))
+    if scale != 1.0:
+        x, y = newimg.shape[:2]
+        x, y = int(x * scale), int(y * scale)
+        newimg = cv2.resize(newimg, (x, y))
     h, w = newimg.shape[:2]
 
     for i, coord in enumerate(coords):

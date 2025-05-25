@@ -3,14 +3,17 @@ import os
 import cv2
 import numpy as np
 import re
+import sys
 
 from torch.utils.data import Dataset, DataLoader
 from data_process.__init__ import noise, rotate, min_scale, max_scale, blur_level
-from data_process.augments import augment_image, scale_img, show_image
+from data_process.augments import augment_image, scale_img, show_image, show_image_coords
 from data_process.__init__ import USE_CPU_WHATEVER, DA, NET, BATCH_SIZE, POCHTI
 
 from torch.utils.data import Sampler
 import random
+
+IMG_EXTENSION = "jpg"
 
 class EpochShuffleSampler(Sampler):
     def __init__(self, data_len, seed=0):
@@ -46,7 +49,7 @@ class CustomDataset(Dataset):
             match = re.search(r'\d+', coords_file)
             numeric_part = match.group(0)
 
-            image_file = f"dataimg{numeric_part}.jpeg"
+            image_file = f"dataimg{numeric_part}.{IMG_EXTENSION}"
             img_path = os.path.join(images_dir, image_file)            
             if not os.path.exists(img_path):
                 raise FileNotFoundError(f"Image {img_path} does not exist.")
@@ -57,11 +60,23 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.images_dir, self.image_files[idx])
-        image = torch.from_numpy(cv2.imread(img_path, cv2.IMREAD_UNCHANGED)).float() / 255.0  
+        # image = torch.from_numpy(cv2.imread(img_path, cv2.IMREAD_UNCHANGED)).float() / 255.0  
+
+        image_np = cv2.imread(img_path, cv2.IMREAD_UNCHANGED).copy()
+        image = torch.from_numpy(image_np).float() / 255.0
         image = image.permute(2, 0, 1) # to (channels, height, width)
-        
+
         coords_path = os.path.join(self.coords_dir, self.coords_files[idx])
-        coords = torch.from_numpy(np.loadtxt(coords_path)).float()
+        # coords = torch.from_numpy(np.loadtxt(coords_path)).float()
+
+        coords_np = np.loadtxt(coords_path)
+        # Обеспечиваем форму (N, 3)
+        coords_np = np.reshape(coords_np, (-1, 3))
+        coords = torch.from_numpy(coords_np).float().clone()
+
+        # необязательно: защита от неожиданной формы
+        if coords_np.ndim != 2 or coords_np.shape[1] != 3:
+            raise ValueError(f"Invalid shape in file {coords_path}: {coords_np.shape}")
 
         if self.aug  or  self.aug == POCHTI:
             scale = torch.FloatTensor(1).uniform_(min_scale, max_scale).item()
@@ -69,7 +84,11 @@ class CustomDataset(Dataset):
 
         # image = image.to(self.device)
         # coords = coords.to(self.device)
-
+        
+        # SIZE CHECK
+        if coords.shape != torch.Size([72, 3]) or image.shape != torch.Size([3, 512, 512]):
+            print(image.shape, coords.shape)
+            print(img_path)
         return image, coords
 
 def collate_fn(batch):

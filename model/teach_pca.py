@@ -8,7 +8,7 @@ import numpy as np
 # from data_process import MakerPCA
 from data_process import load
 
-from data_process.convertor_pca_old import MakerPCA, PCA_COUNT, VERSION
+from data_process.convertor_pca import MakerPCA, PCA_COUNT, VERSION
 from detector.blocked import MultyLayer
 
 from data_process import BATCH_SIZE, DA, NET, POCHTI
@@ -20,7 +20,7 @@ QUICK = DA
 def gen_lim(limit, generator):
     for i, obj in enumerate(generator):
         # if (i % 1 == 0) :
-        print(i)
+        # print(i)
         if i >= limit:
             break
         yield obj
@@ -40,9 +40,9 @@ if __name__ == "__main__":
         "images", 
         "coords", 
         device, 
-        sampler_seed=1620, 
+        sampler_seed=0, 
         augments=AUG,
-        workers=DA
+        workers=NET
     )
 
     dataIterator = iter(dataLoader)
@@ -63,7 +63,6 @@ if __name__ == "__main__":
     for i in range(PCA_cycles):
         new_data = gen_lim(1000, dataIterator)
         sampler.set_seed(i)
-        # mypca = mypca.fit_old(new_data, PCA_COUNT, verbose=True) # OLD VERSION
         mypca = mypca.fit(new_data, verbose=True)
 
     save_path_backup = f'data_process/pcaweights_ext.pca_{time.time()}'
